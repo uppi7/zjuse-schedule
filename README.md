@@ -67,7 +67,7 @@
 ## 3. 目录结构
 
 ```
-automatic-course-arrangement/
+zjuse-schedule/
 ├── app/
 │   ├── main.py                    # FastAPI 入口，路由注册，生命周期管理
 │   ├── api/
@@ -108,7 +108,7 @@ automatic-course-arrangement/
 ### 前提条件
 
 - Docker 已安装并运行
-- `git clone` 本仓库后 `cd automatic-course-arrangement`
+- `git clone` 本仓库后 `cd zjuse-schedule`
 
 ### 步骤
 
