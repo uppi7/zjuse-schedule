@@ -1,0 +1,27 @@
+# Web framework
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+
+# Async ORM & DB
+sqlalchemy[asyncio]==2.0.30
+aiomysql==0.2.0
+alembic==1.13.1
+
+# Pydantic settings
+pydantic==2.7.1
+pydantic-settings==2.2.1
+
+# Celery & Redis
+celery==5.4.0
+redis==5.0.4
+
+# Async HTTP client (cross-service calls)
+httpx==0.27.0
+
+# Utilities
+python-dotenv==1.0.1
+
+# Dev / test
+pytest==8.2.0
+pytest-asyncio==0.23.6
+aiosqlite==0.20.0   # 测试用内存数据库驱动，生产不使用

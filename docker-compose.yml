@@ -1,0 +1,92 @@
+version: "3.9"
+
+# ── 本组独立测试编排文件 ──────────────────────────────────────────────────
+# 用途：排课组内部开发和联调，不涉及跨组集成。
+# 启动命令：docker compose up --build
+#
+# TODO: [外部规范协商] 全局集成时需与大组确认：
+#   1. 共享 Redis 的 Database 编号分配（当前占用 DB 2 和 DB 3）
+#   2. 全局 MySQL/Redis 的内部网络服务别名（当前：mysql / redis）
+#   3. 全局网络名称（当前：app-network，各子系统需加入同一网络）
+
+services:
+
+  # ── MySQL（本组测试用） ─────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: ca_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DB:-course_arrange}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"   # 3307 避免与主机 MySQL 冲突
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # ── Redis（本组测试用） ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ca_redis
+    ports:
+      - "6380:6379"   # 6380 避免与主机 Redis 冲突
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-network
+
+  # ── FastAPI 服务 ────────────────────────────────────────────────────────
+  schedule-api:
+    build: .
+    container_name: ca_api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    env_file: .env
+    environment:
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+    ports:
+      - "8002:8000"   # 本组占用 8002，避免与其他子系统冲突
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app   # 开发模式热重载
+    networks:
+      - app-network
+
+  # ── Celery Worker ────────────────────────────────────────────────────────
+  schedule-worker:
+    build: .
+    container_name: ca_worker
+    command: celery -A app.tasks.celery_app.celery_app worker --loglevel=info --concurrency=4
+    env_file: .env
+    environment:
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - app-network
+
+volumes:
+  mysql_data:
+
+networks:
+  app-network:
+    driver: bridge
