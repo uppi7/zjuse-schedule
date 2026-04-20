@@ -29,7 +29,7 @@
 | **M0：基础设施就绪** | 本地能跑通 | Docker 启动、DB 建表、健康检查通过 |
 | **M1：核心接口可用** | 排课流程跑通（用 stub 数据） | 触发排课 → 查进度 → 查课表 全链路 |
 | **M2：算法替换** | 真实算法上线 | stub 替换为真实排课逻辑 |
-| **M3：跨组联调** | 与第一、三组对接完毕 | 依赖协商结论，`blocked` Issue 解锁后开始 |
+| **M3：跨组联调** | 与第一、三组对接完毕 | 协商已完成，API 地址和字段约定已落定，可直接开始 |
 | **M4：测试完备** | 主要场景有自动化测试覆盖 | 可与 M1/M2 并行推进 |
 
 ### Issue 正文模板
@@ -47,7 +47,7 @@
 （可选：指向具体文件、函数或设计决策）
 
 ## 依赖
-（可选：前置 Issue 编号，或"需等待协商结论 X-X"）
+（可选：前置 Issue 编号，或"无依赖"）
 ```
 
 ---
@@ -55,7 +55,7 @@
 ## 二、Issue 清单
 
 > 按 Milestone 排列，同一 Milestone 内优先级从高到低。
-> 带 🔒 的 Issue 需等待跨组协商结论，先建 Issue、打 `blocked` 标签，协商完成后去掉 `blocked` 加 `ready`。
+> 所有 Issue 当前均已 `ready`，可直接认领开始。
 
 ---
 
@@ -196,36 +196,36 @@
 
 ### M3：跨组联调
 
-**#13 🔒 · 对接基础信息组：替换教师/课程数据拉取逻辑**
-- Label: `backend` `blocked`
-- 背景：当前 `_fetch_upstream_data()` 使用 stub 数据，需等待协商结论（议题 1-A、1-B）后替换为真实调用。
-- 解锁条件：议题 1-A、1-B 协商完成（URL 和 JSON 结构已确认）
+**#13 · 对接基础信息组：替换教师/课程数据拉取逻辑**
+- Label: `backend` `ready`
+- 背景：当前 `_fetch_upstream_data()` 使用 fallback stub 数据。API 地址和字段格式已与第一组确认，可直接对接。
+- 约定：`GET http://info-service:8000/api/v1/teachers`（字段：`teacher_id`、`name`）；`GET http://info-service:8000/api/v1/courses`（字段：`course_id`、`teacher_id`、`weekly_hours`、`student_count`、`needs_lab`）；外层均为 `{"code":0,"data":[...]}`。
 - 验收标准：
-  - [ ] 排课任务从基础信息组实际拉取教师列表
-  - [ ] 排课任务从基础信息组实际拉取课程列表
+  - [ ] 排课任务从基础信息组实际拉取教师列表并正确解包字段
+  - [ ] 排课任务从基础信息组实际拉取课程列表并正确解包字段
   - [ ] 上游服务不可用时，任务状态更新为 FAILED，错误码为 2005
+- 实现提示：修改 `app/tasks/scheduler_tasks.py` → `_fetch_upstream_data()`，移除 fallback 分支
 
 ---
 
-**#14 🔒 · 对接网关：更新认证 Header 字段名**
-- Label: `backend` `blocked`
-- 背景：`X-User-Id`、`X-User-Role` 为占位值，需等待协商结论（议题 1-C）后更新。
-- 解锁条件：议题 1-C 协商完成
+**#14 · 对接网关：端到端验证认证 Header**
+- Label: `backend` `ready`
+- 背景：认证 Header 字段名（`X-User-Id` / `X-User-Role`）和角色枚举（`ADMIN` / `TEACHER` / `STUDENT`）已与网关负责人确认并写入代码，需做全链路验证。
 - 验收标准：
-  - [ ] 使用正式 Header 字段名后，所有需要认证的接口均返回 200（而非 401）
-  - [ ] 无 Header 时仍返回 401
-  - [ ] 更新 `.env.example` 中的默认值
+  - [ ] 携带正确 Header 的请求正常返回（200 / 201）
+  - [ ] 无 Header 的请求返回 401
+  - [ ] STUDENT 角色调用写接口返回 403
+  - [ ] 与网关联调时行为与单测一致
 
 ---
 
-**#15 🔒 · 对接选课组：实现排课完成通知**
-- Label: `backend` `blocked`
-- 背景：`notify_downstream()` 目前为空实现，需等待协商结论（议题 2-A）后实现真正的通知逻辑。
-- 解锁条件：议题 2-A 协商完成（确定方案 A 还是方案 B）
-- 验收标准（方案 A）：
-  - [ ] 选课组能通过 `GET /api/v1/schedule/entries` 成功拉取数据
-- 验收标准（方案 B）：
-  - [ ] 排课完成后，MQ 中出现事件消息，格式与约定一致
+**#15 · 对接选课组：验证课表拉取接口**
+- Label: `backend` `ready`
+- 背景：下游交付方式已确定为拉取 API。`GET /api/v1/schedule/entries` 已实现，需与第三组联调验证字段满足需求。
+- 验收标准：
+  - [ ] 第三组能通过 `GET /api/v1/schedule/entries?semester=...` 成功拉取数据
+  - [ ] 返回字段满足选课组需求（如需新增字段，修改 `app/schemas/schedule.py` → `ScheduleEntryOut`）
+  - [ ] 接口支持 `teacher_id`、`course_id` 筛选参数正常工作
 
 ---
 
@@ -277,6 +277,6 @@
 | 算法组 | #11 → #12 |
 | 前端 | #9 → #10 |
 | 测试 | #2 → #16 → #19（可与后端并行） |
-| 任何人 | #13、#14、#15 等协商结束即可开始 |
+| 任何人 | #13、#14、#15（跨组联调，可直接开始） |
 
 > 一个 Issue 同时只由一人认领（assign）。如果预计工作量超过 2 天，建议拆成子 Issue。

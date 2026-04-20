@@ -51,55 +51,61 @@
 
 ---
 
-## 二、跨系统数据契约（待确认）
+## 二、跨系统数据契约
 
 ### 2.1 从第一组拉取：教师数据
 
-**接口：** `GET {INFO_SERVICE_BASE_URL}/api/v1/teachers`
+**接口：** `GET http://info-service:8000/api/v1/teachers`
 
-**当前假设返回格式（待确认）：**
+**约定返回格式：**
 
 ```json
-[
-  {
-    "teacher_id": "T001",
-    "name": "张三",
-    "department": "计算机学院",
-    "available_slots": [
-      {"day": 1, "slot": 1},
-      {"day": 1, "slot": 3}
-    ]
-  }
-]
+{
+  "code": 0,
+  "msg": "success",
+  "data": [
+    {
+      "teacher_id": "T001",
+      "name": "张三"
+    }
+  ]
+}
 ```
 
-> ⚠️ TODO: 与第一组确认实际字段名
+解包逻辑见 `app/core/external_clients.py` → `get_all_teachers()`，取 `body["data"]`。
 
 ### 2.2 从第一组拉取：课程数据
 
-**接口：** `GET {INFO_SERVICE_BASE_URL}/api/v1/courses`
+**接口：** `GET http://info-service:8000/api/v1/courses`
 
-**当前假设返回格式（待确认）：**
+**约定返回格式：**
 
 ```json
-[
-  {
-    "course_id": "C001",
-    "name": "高等数学",
-    "credit": 3,
-    "weekly_hours": 4,
-    "teacher_id": "T001",
-    "student_count": 60,
-    "needs_lab": false
-  }
-]
+{
+  "code": 0,
+  "msg": "success",
+  "data": [
+    {
+      "course_id": "C001",
+      "name": "高等数学",
+      "teacher_id": "T001",
+      "weekly_hours": 4,
+      "student_count": 60,
+      "needs_lab": false
+    }
+  ]
+}
 ```
+
+解包逻辑见 `app/core/external_clients.py` → `get_all_courses()`，取 `body["data"]`。
 
 ### 2.3 向第三组提供：课表数据
 
 **接口：** `GET /api/v1/schedule/entries?semester=2024-2025-1`
 
-**返回格式（已确定）：**
+第三组（智能选课组）通过此接口主动拉取课表，排课完成后无需通知，第三组自行轮询或在需要时调用。
+
+**返回格式：**
 
 ```json
 {
@@ -122,4 +128,4 @@
 }
 ```
 
-> ℹ️ 第三组可直接使用此接口拉取课表，也可等待 MQ 事件通知（待协商）。
+支持的筛选参数：`semester`（必填）、`teacher_id`（可选）、`course_id`（可选）。

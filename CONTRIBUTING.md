@@ -52,7 +52,7 @@ git clone git@github.com:uppi7/zjuse-schedule.git
 cd zjuse-schedule
 ```
 
-### 2.2 启动本地开发环境
+### 2.2 启动开发环境
 
 ```bash
 # 复制环境变量（首次）
@@ -66,21 +66,9 @@ curl http://localhost:8002/health
 # 期望输出：{"status": "ok", "service": "automatic-course-arrangement"}
 ```
 
-### 2.3 本地开发（不用 Docker，推荐后端日常开发）
+代码修改后 API 自动热重载（Uvicorn `--reload` 模式），无需重启容器。
 
-```bash
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-
-# 修改 .env 将 Host 改为 localhost
-# MYSQL_HOST=localhost  REDIS_HOST=localhost
-
-uvicorn app.main:app --reload --port 8002   # 启动 API
-# 另开终端：
-celery -A app.tasks.celery_app.celery_app worker --loglevel=info
-```
-
-> API 文档访问：http://localhost:8002/docs
+> API 文档：http://localhost:8002/docs　　查看容器日志：`docker compose logs -f schedule-api`
 
 ---
 
@@ -325,7 +313,7 @@ sleep 10
 pytest tests/ -v --tb=short
 
 # 手动执行排课全链路冒烟测试
-bash tests/smoke_test.sh   # （后续由测试组创建）
+bash tests/smoke_test.sh
 ```
 
 ### 8.2 打版本 Tag
@@ -353,8 +341,9 @@ Tag 命名规范：`v<major>.<minor>.<patch>`
 # 构建镜像
 docker build -t schedule-api:v0.1.0 .
 
-# 推送到镜像仓库（地址待大组确认后补充）
-docker push <registry>/schedule-api:v0.1.0
+# 推送到 GitHub Container Registry
+docker tag schedule-api:v0.1.0 ghcr.io/uppi7/schedule-api:v0.1.0
+docker push ghcr.io/uppi7/schedule-api:v0.1.0
 ```
 
 ---
