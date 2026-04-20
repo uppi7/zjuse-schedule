@@ -1,30 +1,32 @@
-# 开发指南
+# 技术开发手册
 
-面向**后端开发、前端开发、测试人员**的详细说明。
+> **工作流程** 见根目录 [CONTRIBUTING.md](../CONTRIBUTING.md)。  
+> 本文档只记录技术层面的"怎么写代码"，不重复流程规范。
 
 ---
 
-## 一、后端开发指南
+## 一、后端：添加新接口
 
-### 1.1 添加新接口的标准流程
+按以下顺序创建文件，每步都有对应目录。
 
-1. **在 `app/schemas/` 中定义请求/响应 DTO**
+### Step 1 — Schema（DTO）
 
 ```python
 # app/schemas/xxx.py
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class XxxCreate(BaseModel):
-    field1: str
-    field2: int
+    name: str = Field(..., max_length=64)
+    value: int = Field(..., gt=0)
 
 class XxxOut(BaseModel):
     id: int
-    field1: str
+    name: str
+    value: int
     model_config = {"from_attributes": True}
 ```
 
-2. **在 `app/models/` 中定义数据表（如需新表）**
+### Step 2 — Model（数据表，如需新表）
 
 ```python
 # app/models/xxx.py
@@ -34,13 +36,27 @@ from app.core.database import Base
 class Xxx(Base):
     __tablename__ = "xxx_table"
     id: Mapped[int] = mapped_column(primary_key=True)
-    field1: Mapped[str]
+    name: Mapped[str]
+    value: Mapped[int]
 ```
 
-3. **在 `app/services/` 中编写业务逻辑**
+新增 model 后，在 `app/models/__init__.py` 加一行 import，然后重新生成迁移：
+
+```bash
+alembic revision --autogenerate -m "add xxx table"
+alembic upgrade head
+```
+
+### Step 3 — Service（业务逻辑）
 
 ```python
 # app/services/xxx_service.py
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from fastapi import HTTPException, status
+from app.models.xxx import Xxx
+from app.schemas.response import BizCode
+
 async def create_xxx(db: AsyncSession, data: XxxCreate) -> Xxx:
     obj = Xxx(**data.model_dump())
     db.add(obj)
@@ -49,275 +65,186 @@ async def create_xxx(db: AsyncSession, data: XxxCreate) -> Xxx:
     return obj
 ```
 
-4. **在 `app/api/v1/` 中编写路由**
+### Step 4 — Router（路由）
 
 ```python
 # app/api/v1/xxx.py
 from fastapi import APIRouter, Depends
+from app.core.database import get_db
+from app.api.dependencies import get_current_user, require_admin
 from app.schemas.response import ApiResponse
+from app.services import xxx_service
 
 router = APIRouter(prefix="/xxx", tags=["XXX模块"])
 
-@router.post("", response_model=ApiResponse[XxxOut])
-async def create_xxx(data: XxxCreate, db=Depends(get_db)):
+@router.post("", response_model=ApiResponse[XxxOut], status_code=201)
+async def create_xxx(data: XxxCreate, db=Depends(get_db), _=Depends(require_admin)):
     obj = await xxx_service.create_xxx(db, data)
     return ApiResponse.ok(data=XxxOut.model_validate(obj))
 ```
 
-5. **在 `app/main.py` 中注册路由**
+### Step 5 — 注册路由
 
 ```python
+# app/main.py
 from app.api.v1 import xxx
 app.include_router(xxx.router, prefix=API_PREFIX)
 ```
 
 ---
 
-### 1.2 修改排课算法（算法组）
+## 二、后端：错误处理
 
-打开 [app/algorithm/engine.py](../app/algorithm/engine.py)，找到 `run_schedule()` 函数并替换其中的 stub 实现。
-
-**接口约定（不得更改）：**
-
-```python
-def run_schedule(
-    courses: list[CourseInput],
-    classrooms: list[ClassroomInput],
-    teachers: list[TeacherAvailability],
-) -> tuple[list[ScheduleResult], list[str]]:
-    # 返回：(成功排课列表, 未能排课的 course_id 列表)
-    ...
-```
-
-算法运行在 Celery Worker 进程中，为纯同步 Python 代码，**不能使用 `async`**。
-
-**在任务中汇报进度（可选）：**
-
-在 `app/tasks/scheduler_tasks.py` 的 `run_auto_schedule` 任务里，通过以下方式更新进度：
-
-```python
-self.update_state(state="PROGRESS", meta={"progress": 50, "message": "算法运行到一半了"})
-```
-
----
-
-### 1.3 调用上游微服务
-
-统一通过 `app/core/external_clients.py` 中的 `InfoServiceClient`：
-
-```python
-from app.core.external_clients import get_info_client
-
-client = get_info_client()
-teachers = await client.get_all_teachers()
-courses = await client.get_all_courses()
-```
-
-> ⚠️ 上游 API URL 由 `.env` 中的 `INFO_SERVICE_*` 变量控制，
-> 正式联调前需与第一组确认后更新。
-
----
-
-### 1.4 统一错误处理
-
-**不要直接返回 HTTP 500**，使用以下方式：
+**已知业务错误**（有对应错误码）：
 
 ```python
 from fastapi import HTTPException, status
 from app.schemas.response import BizCode
 
-# 已知业务错误
 raise HTTPException(
     status_code=status.HTTP_404_NOT_FOUND,
     detail={"code": BizCode.CLASSROOM_NOT_FOUND, "msg": "教室不存在"}
 )
-
-# 新增错误码：在 app/schemas/response.py 的 BizCode 类中添加
 ```
+
+**需要新增错误码**时，在 `app/schemas/response.py` 的 `BizCode` 类中添加。排课组号段：2000–2099。
 
 ---
 
-## 二、前端开发指南
+## 三、后端：权限控制
 
-### 2.1 认证 Header
-
-每个请求需携带网关透传的认证 Header：
-
-```http
-X-User-Id: <用户ID>
-X-User-Role: ADMIN   # 或 TEACHER / STUDENT
-```
-
-> ⚠️ Header 字段名待与第一组确认，正式确认后更新此处。
-
-### 2.2 排课功能的前端交互流程
-
-```
-1. 管理员点击"触发排课"
-   → POST /api/v1/schedule/auto-schedule
-   ← {"data": {"task_id": "abc123", "semester": "..."}}
-
-2. 保存 task_id，开始轮询（每 3 秒一次）
-   → GET /api/v1/schedule/schedule-status/abc123
-   ← {"data": {"status": "RUNNING", "progress": 45, "message": "算法运行中..."}}
-
-3. 显示进度条（progress: 0→100）
-
-4. 当 status === "SUCCESS" 时停止轮询
-   ← {"data": {"status": "SUCCESS", "progress": 100, "result_summary": {...}}}
-
-5. 跳转到课表展示页面
-   → GET /api/v1/schedule/entries?semester=2024-2025-1
-```
-
-### 2.3 响应格式
-
-所有接口统一格式：
-
-```typescript
-interface ApiResponse<T> {
-  code: number;    // 0=成功，非零=错误
-  msg: string;
-  data: T | null;
-}
-```
-
-### 2.4 本地联调配置
-
-前端 dev server 代理配置（以 Vite 为例）：
-
-```javascript
-// vite.config.js
-server: {
-  proxy: {
-    '/api': 'http://localhost:8002'
-  }
-}
-```
-
----
-
-## 三、测试人员指南
-
-### 3.1 测试环境搭建
-
-```bash
-# 启动后端（包含测试用 MySQL 和 Redis）
-docker compose up --build
-
-# 等待 http://localhost:8002/health 返回 {"status": "ok"}
-```
-
-### 3.2 使用 Swagger UI 测试
-
-访问 http://localhost:8002/docs
-
-每个请求需先在 Swagger 页面顶部点击 "Authorize" 并填写：
-
-```
-X-User-Id: testuser001
-X-User-Role: ADMIN
-```
-
-### 3.3 关键测试场景
-
-#### 场景 1：完整排课流程
-
-```bash
-# Step 1: 触发排课
-curl -X POST http://localhost:8002/api/v1/schedule/auto-schedule \
-  -H "Content-Type: application/json" \
-  -H "X-User-Id: admin001" \
-  -H "X-User-Role: ADMIN" \
-  -d '{"semester": "2024-2025-1"}'
-# 记录返回的 task_id
-
-# Step 2: 查询进度（每隔几秒执行）
-curl http://localhost:8002/api/v1/schedule/schedule-status/<task_id> \
-  -H "X-User-Id: admin001" \
-  -H "X-User-Role: ADMIN"
-
-# Step 3: 查询结果
-curl "http://localhost:8002/api/v1/schedule/entries?semester=2024-2025-1" \
-  -H "X-User-Id: admin001" \
-  -H "X-User-Role: ADMIN"
-```
-
-#### 场景 2：权限拦截测试
-
-```bash
-# 学生角色触发排课，应返回 403
-curl -X POST http://localhost:8002/api/v1/schedule/auto-schedule \
-  -H "Content-Type: application/json" \
-  -H "X-User-Id: student001" \
-  -H "X-User-Role: STUDENT" \
-  -d '{"semester": "2024-2025-1"}'
-```
-
-#### 场景 3：教室 CRUD
-
-```bash
-# 创建教室
-curl -X POST http://localhost:8002/api/v1/classrooms \
-  -H "Content-Type: application/json" \
-  -H "X-User-Id: admin001" \
-  -H "X-User-Role: ADMIN" \
-  -d '{"code":"A101","name":"A座101","building":"A座","capacity":120,"room_type":"LECTURE"}'
-
-# 查询教室列表
-curl http://localhost:8002/api/v1/classrooms \
-  -H "X-User-Id: admin001" -H "X-User-Role: ADMIN"
-```
-
-### 3.4 编写自动化测试
-
-测试文件放在 `tests/` 目录，使用 `pytest-asyncio`：
+| 依赖函数 | 允许角色 | 使用场景 |
+|---|---|---|
+| `get_current_user` | 所有登录用户 | 查询类接口 |
+| `require_admin` | ADMIN 只 | 触发排课、创建/删除教室 |
+| `require_teacher_or_admin` | TEACHER + ADMIN | 教师相关写操作 |
 
 ```python
-# tests/test_classrooms.py
-import pytest
-from httpx import AsyncClient
-from app.main import app
+# 查询接口（所有登录用户）
+@router.get("", ...)
+async def list_xxx(_user=Depends(get_current_user)): ...
 
-@pytest.mark.asyncio
-async def test_create_classroom():
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        resp = await client.post(
-            "/api/v1/classrooms",
-            json={"code": "B202", "name": "B座202", "building": "B座",
-                  "capacity": 80, "room_type": "LECTURE"},
-            headers={"X-User-Id": "admin", "X-User-Role": "ADMIN"},
-        )
-    assert resp.status_code == 201
-    assert resp.json()["code"] == 0
-```
-
-运行测试：
-
-```bash
-pytest tests/ -v
+# 写接口（仅管理员）
+@router.post("", ...)
+async def create_xxx(_admin=Depends(require_admin)): ...
 ```
 
 ---
 
-## 四、常见问题
+## 四、后端：Celery 异步任务
 
-**Q: Celery Worker 看不到任务怎么办？**
+触发耗时任务（排课算法）的标准模式：
 
-检查 Redis 连接，确认 `CELERY_BROKER_DB` 和 Worker 使用同一配置：
+```python
+# 接口层：立即返回 task_id，不阻塞
+celery_task = some_task.delay(arg1, arg2)
+return ApiResponse.ok(data={"task_id": celery_task.id})
 
-```bash
-docker compose logs schedule-worker
+# 任务层：汇报进度
+@celery_app.task(bind=True)
+def some_task(self, arg1, arg2):
+    self.update_state(state="PROGRESS", meta={"progress": 30, "message": "处理中..."})
+    # ... 执行逻辑 ...
+    return {"result": "done"}
 ```
 
-**Q: 数据库连接失败？**
+查询进度：`celery.result.AsyncResult(task_id, app=celery_app).state`
 
-等待 MySQL 健康检查通过（约 30 秒），或手动运行迁移：
+---
 
-```bash
-docker compose exec schedule-api alembic upgrade head
+## 五、后端：调用上游服务（基础信息组）
+
+```python
+from app.core.external_clients import get_info_client
+
+client = get_info_client()
+teachers = await client.get_all_teachers()   # 返回 list[dict]
+courses  = await client.get_all_courses()
 ```
 
-**Q: 上游服务不可用时如何测试？**
+上游不可用时会抛出 `httpx.HTTPError`，在 Celery 任务中已有 fallback stub，开发阶段无需关心。
 
-`scheduler_tasks.py` 中的 `_fetch_upstream_data()` 已内置 fallback stub 数据，上游不可用时自动使用 stub，不影响本组功能开发。
+---
+
+## 六、测试：编写测试用例
+
+测试使用 SQLite 内存库，直接 `pytest tests/ -v` 即可，无需启动 MySQL。
+
+### 基础结构
+
+```python
+# tests/test_xxx.py
+import pytest
+from httpx import AsyncClient
+
+async def test_create_xxx(client: AsyncClient):          # ADMIN 角色
+    resp = await client.post("/api/v1/xxx", json={...})
+    assert resp.status_code == 201
+    assert resp.json()["code"] == 0
+
+async def test_create_xxx_forbidden(student_client: AsyncClient):  # STUDENT 角色
+    resp = await student_client.post("/api/v1/xxx", json={...})
+    assert resp.status_code == 403
+```
+
+### 可用 Fixture（定义在 `tests/conftest.py`）
+
+| Fixture | 说明 |
+|---|---|
+| `client` | ADMIN 角色的 HTTP 客户端 |
+| `student_client` | STUDENT 角色的 HTTP 客户端 |
+| `db_session` | 数据库 Session（每个测试后回滚） |
+
+### 需要其他角色时
+
+```python
+# tests/conftest.py 中添加
+@pytest.fixture
+async def teacher_client(db_session):
+    async def override_get_db():
+        yield db_session
+    app.dependency_overrides[get_db] = override_get_db
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers={"X-User-Id": "teacher-001", "X-User-Role": "TEACHER"},
+    ) as ac:
+        yield ac
+    app.dependency_overrides.clear()
+```
+
+---
+
+## 七、数据库迁移（Alembic）
+
+```bash
+# 生成迁移脚本（修改 model 后执行）
+alembic revision --autogenerate -m "描述"
+
+# 应用迁移
+alembic upgrade head
+
+# 回退一步
+alembic downgrade -1
+
+# 查看当前版本
+alembic current
+```
+
+> 迁移脚本需提交到仓库（`alembic/versions/` 目录）。
+
+---
+
+## 八、常见问题
+
+**Q: 修改代码后 Docker 内的 API 没有更新？**  
+A: `docker compose up` 已挂载本地目录，Uvicorn `--reload` 模式会自动重启。如果不生效，`docker compose restart schedule-api`。
+
+**Q: Celery Worker 没有执行任务？**  
+A: 检查 Redis 连接：`docker compose logs schedule-worker | grep "ready"`。
+
+**Q: 数据库表不存在？**  
+A: `docker compose exec schedule-api alembic upgrade head`
+
+**Q: 测试报 `no event loop`？**  
+A: 确认 `pytest.ini` 中有 `asyncio_mode = auto`，且 `pytest-asyncio` 已安装。
