@@ -1,141 +1,89 @@
-# 跨组协商议题清单 — 自动排课组
+# 跨组协商结论记录 — 自动排课组
 
+> 本文档记录已落定的跨组约定。若后续协商结果有变，直接修改对应行并更新代码。
 
 ---
 
 ## 议题一：与第一组（基础信息组）
 
-### 1-A 上游 API 地址与路径
+### 1-A 上游 API 地址与路径 ✅ 已落定
 
-排课算法启动前，需要从基础信息组拉取**教师数据**和**课程数据**。我们目前用 `httpx` 异步调用，但 URL 是占位值，需要第一组给出正式地址。
+| 编号 | 事项 | 确认值 | 配置位置 |
+|---|---|---|---|
+| 1-A-1 | 基础信息服务内网地址 | `http://info-service:8000` | `.env` → `INFO_SERVICE_BASE_URL` |
+| 1-A-2 | 教师列表 API 路径 | `GET /api/v1/teachers` | `.env` → `INFO_SERVICE_TEACHERS_PATH` |
+| 1-A-3 | 课程列表 API 路径 | `GET /api/v1/courses` | `.env` → `INFO_SERVICE_COURSES_PATH` |
 
-| 编号 | 需要确认的问题 | 我方当前占位值 | 结论（会议填写） | 需改动文件 |
-|---|---|---|---|---|
-| 1-A-1 | 基础信息服务的 Docker 内网服务名和端口 | `info-service:8000` | | `.env` → `INFO_SERVICE_BASE_URL` |
-| 1-A-2 | 获取全量教师列表的 URL 路径 | `/api/v1/teachers` | | `.env` → `INFO_SERVICE_TEACHERS_PATH` |
-| 1-A-3 | 获取全量课程列表的 URL 路径 | `/api/v1/courses` | | `.env` → `INFO_SERVICE_COURSES_PATH` |
+### 1-B 上游 API 返回的 JSON 结构 ✅ 已落定
 
----
+响应外层格式与本系统一致：`{"code": 0, "msg": "success", "data": [...]}`
 
-### 1-B 上游 API 返回的 JSON 结构
+**教师接口**每条记录字段：
 
-URL 确定后，还需要知道每个字段叫什么名字，排课算法才能正确读取教师可用时段、课程学生人数等信息。
-
-**需要第一组提供或确认：**
-
-**教师接口**返回的每条记录至少包含哪些字段？
-
-我方需要的最小字段集：
-
-| 字段用途 | 我方需要的信息 | 第一组实际字段名（会议填写） |
+| 字段名 | 类型 | 说明 |
 |---|---|---|
-| 唯一标识教师 | 教师 ID | |
-| 排课冲突检测 | 教师可用时间段（星期+节次） | |
+| `teacher_id` | string | 教师唯一标识 |
+| `name` | string | 姓名 |
 
-**课程接口**返回的每条记录至少包含哪些字段？
+**课程接口**每条记录字段：
 
-| 字段用途 | 我方需要的信息 | 第一组实际字段名（会议填写） |
+| 字段名 | 类型 | 说明 |
 |---|---|---|
-| 唯一标识课程 | 课程 ID | |
-| 匹配教师 | 授课教师 ID | |
-| 教室容量匹配 | 选课学生人数 | |
-| 每周排课次数 | 周课时数 | |
-| 区分实验课 | 是否需要实验室 | |
+| `course_id` | string | 课程唯一标识 |
+| `name` | string | 课程名称 |
+| `teacher_id` | string | 授课教师 ID |
+| `weekly_hours` | int | 每周课时数 |
+| `student_count` | int | 选课学生人数 |
+| `needs_lab` | bool | 是否需要实验室，默认 false |
 
-> 需改动文件：`app/core/external_clients.py` 中的注释和字段解包逻辑。
+> 代码位置：`app/core/external_clients.py`
 
----
+### 1-C 网关认证透传规范 ✅ 已落定
 
-### 1-C 网关认证透传规范
-
-本系统部署在统一网关之后，不自己验 JWT，由网关在转发请求时把用户信息写入 Header。我们需要知道具体字段名。
-
-| 编号 | 需要确认的问题 | 我方当前占位值 | 结论（会议填写） | 需改动文件 |
-|---|---|---|---|---|
-| 1-C-1 | 透传用户 ID 的 Header 字段名 | `X-User-Id` | | `.env` → `AUTH_HEADER_USER_ID` |
-| 1-C-2 | 透传用户角色的 Header 字段名 | `X-User-Role` | | `.env` → `AUTH_HEADER_USER_ROLE` |
-| 1-C-3 | "教务管理员"角色的枚举值字符串 | `ADMIN` | | `.env` → `ROLE_ADMIN` |
-| 1-C-4 | "教师"角色的枚举值字符串 | `TEACHER` | | `.env` → `ROLE_TEACHER` |
-| 1-C-5 | "学生"角色的枚举值字符串 | `STUDENT` | | `.env` → `ROLE_STUDENT` |
-
-> **影响说明：** 如果字段名或枚举值与占位值不同，认证中间件会对所有请求返回 401，整个系统无法使用。
+| 事项 | 确认值 | 配置位置 |
+|---|---|---|
+| 用户 ID Header | `X-User-Id` | `.env` → `AUTH_HEADER_USER_ID` |
+| 用户角色 Header | `X-User-Role` | `.env` → `AUTH_HEADER_USER_ROLE` |
+| 教务管理员 Role Code | `ADMIN` | `.env` → `ROLE_ADMIN` |
+| 教师 Role Code | `TEACHER` | `.env` → `ROLE_TEACHER` |
+| 学生 Role Code | `STUDENT` | `.env` → `ROLE_STUDENT` |
 
 ---
 
 ## 议题二：与第三组（智能选课组）
 
-### 2-A 排课结果的交付方式
+### 2-A 排课结果交付方式 ✅ 已落定：拉取 API
 
-排课完成后，选课系统需要知道课表数据。我们预留了两种方案，需要双方确认选哪个：
-
-| 方案 | 说明 | 优点 | 缺点 |
-|---|---|---|---|
-| **方案 A：拉取 API** | 第三组主动调用 `GET /api/v1/schedule/entries?semester=...` 获取课表 | 框架已实现，零额外开发量 | 第三组需要知道排课何时完成（可轮询或排课系统主动通知） |
-| **方案 B：MQ 事件广播** | 排课完成后，我方向消息队列推一个事件，第三组订阅 | 解耦，第三组实时感知 | 需额外实现 MQ 发布逻辑，并统一 MQ 类型 |
-
-**会议结论：** 选择方案 ______（A / B / 两者结合）
-
----
-
-### 2-B 若选方案 B（MQ），需进一步确认
-
-| 编号 | 需要确认的问题 | 结论（会议填写） | 需改动文件 |
-|---|---|---|---|
-| 2-B-1 | MQ 类型：Redis Pub/Sub 还是其他 | | `app/services/schedule_service.py` → `notify_downstream()` |
-| 2-B-2 | Topic / Channel 名称 | | 同上 |
-| 2-B-3 | 事件 JSON 结构（至少包含哪些字段） | | 同上 |
-
----
-
-### 2-C 若选方案 A（拉取 API），需进一步确认
-
-`GET /api/v1/schedule/entries` 当前返回的字段：
+选课组通过以下接口主动拉取课表，排课组无需主动推送：
 
 ```
-id, semester, course_id, teacher_id, classroom_id,
-day_of_week, slot_start, slot_end, week_start, week_end
+GET /api/v1/schedule/entries?semester=2024-2025-1
 ```
 
-**需要第三组确认：**
+返回字段：`id, semester, course_id, teacher_id, classroom_id, day_of_week, slot_start, slot_end, week_start, week_end`
 
-| 编号 | 需要确认的问题 | 结论（会议填写） | 需改动文件 |
-|---|---|---|---|
-| 2-C-1 | 以上字段是否满足需求？是否需要增加字段 | | `app/schemas/schedule.py` → `ScheduleEntryOut` |
-| 2-C-2 | 分页方式：offset/limit 还是游标分页 | | `app/api/v1/schedule.py` |
+若后续需要增加字段，修改 `app/schemas/schedule.py` 中的 `ScheduleEntryOut`。
 
 ---
 
 ## 议题三：与大组
 
-### 3-A 业务错误码号段分配
+### 3-A 业务错误码号段 ✅ 已落定
 
-各子系统的业务错误码不能重叠，否则前端无法区分错误来源。需要大组统一分配。
+排课组占用 **2000–2099**，见 `app/schemas/response.py` → `BizCode`。
 
-| 编号 | 需要确认的问题 | 我方当前占位值 | 结论（会议填写） | 需改动文件 |
-|---|---|---|---|---|
-| 3-A-1 | 排课组的错误码号段（建议 100 个） | `2000–2099` | | `app/schemas/response.py` → `BizCode` |
+### 3-B 基础设施资源分配 ✅ 已落定
 
----
+| 资源 | 分配值 | 配置位置 |
+|---|---|---|
+| Redis DB（Celery broker） | DB 2 | `.env` → `CELERY_BROKER_DB` |
+| Redis DB（Celery result） | DB 3 | `.env` → `CELERY_RESULT_DB` |
+| MySQL 内网服务别名 | `mysql` | `.env` → `MYSQL_HOST` |
+| Redis 内网服务别名 | `redis` | `.env` → `REDIS_HOST` |
 
-### 3-B 基础设施资源分配
+### 3-C 网络与端口 ✅ 已落定
 
-全局集成时，MySQL 和 Redis 由大组统一部署，各子系统不能抢占同一资源（否则数据互相覆盖）。
-
-| 编号 | 需要确认的问题 | 我方当前占位值 | 结论（会议填写） | 需改动文件 |
-|---|---|---|---|---|
-| 3-B-1 | 排课组 Celery Broker 使用的 Redis DB 编号 | `DB 2` | | `.env` → `CELERY_BROKER_DB` |
-| 3-B-2 | 排课组 Celery Result 使用的 Redis DB 编号 | `DB 3` | | `.env` → `CELERY_RESULT_DB` |
-| 3-B-3 | 全局集成时 MySQL 服务的内网别名 | `mysql` | | `.env` → `MYSQL_HOST` |
-| 3-B-4 | 全局集成时 Redis 服务的内网别名 | `redis` | | `.env` → `REDIS_HOST` |
-
----
-
-### 3-C 网络与端口规划
-
-| 编号 | 需要确认的问题 | 我方当前占位值 | 结论（会议填写） | 需改动文件 |
-|---|---|---|---|---|
-| 3-C-1 | 本子系统 API 对外暴露的宿主机端口 | `8002` | | `docker-compose.yml` |
-| 3-C-2 | 全局 Docker Compose 共享网络名称 | `app-network` | | `docker-compose.yml` |
-
----
-
+| 事项 | 值 | 配置位置 |
+|---|---|---|
+| API 宿主机端口 | `8002` | `docker-compose.yml` |
+| Docker 网络名 | `app-network` | `docker-compose.yml` |

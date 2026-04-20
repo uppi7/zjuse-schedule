@@ -110,6 +110,7 @@ zjuse-schedule/
 - Docker 已安装并运行
 - `git clone` 本仓库后 `cd zjuse-schedule`
 
+
 ### 步骤
 
 ```bash
@@ -137,26 +138,6 @@ docker compose down -v       # 停止并清除 volume 数据
 
 ## 5. 开发指南
 
-### 本地开发（不用 Docker）
-
-```bash
-# 创建虚拟环境
-python -m venv venv && source venv/bin/activate
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 配置环境变量（修改为本地服务地址）
-cp .env.example .env
-# 编辑 .env，将 MYSQL_HOST=localhost, REDIS_HOST=localhost
-
-# 启动 FastAPI
-uvicorn app.main:app --reload --port 8002
-
-# 另开终端，启动 Celery Worker
-celery -A app.tasks.celery_app.celery_app worker --loglevel=info
-```
-
 ### 数据库迁移（Alembic）
 
 ```bash
@@ -176,84 +157,6 @@ alembic upgrade head
 pytest tests/ -v
 ```
 
----
-
-## 6. API 接口说明
-
-所有接口统一返回格式：
-
-```json
-{"code": 0, "msg": "success", "data": {...}}
-```
-
-`code=0` 表示成功，非零为错误（错误码见 `app/schemas/response.py`）。
-
-### 6.1 触发自动排课
-
-```
-POST /api/v1/schedule/auto-schedule
-权限：ADMIN
-
-请求体：
-{"semester": "2024-2025-1"}
-
-响应：
-{"code": 0, "msg": "Schedule task submitted", "data": {"task_id": "xxx", "semester": "2024-2025-1"}}
-```
-
-### 6.2 查询排课进度
-
-```
-GET /api/v1/schedule/schedule-status/{task_id}
-权限：全部登录用户
-
-响应：
-{
-  "code": 0, "msg": "success",
-  "data": {
-    "task_id": "xxx",
-    "status": "RUNNING",    // PENDING | RUNNING | SUCCESS | FAILED
-    "progress": 70,         // 0-100
-    "message": "算法运行中...",
-    "result_summary": null  // SUCCESS 时返回摘要
-  }
-}
-```
-
-### 6.3 手动调课
-
-```
-POST /api/v1/schedule/manual-adjust
-权限：ADMIN
-
-请求体：
-{
-  "entry_id": 42,
-  "new_classroom_id": 3,
-  "new_day_of_week": 2,
-  "new_slot_start": 3,
-  "new_slot_end": 4
-}
-```
-
-### 6.4 查询课表
-
-```
-GET /api/v1/schedule/entries?semester=2024-2025-1&teacher_id=T001
-权限：全部登录用户
-```
-
-### 6.5 教室管理
-
-| 方法 | 路径 | 权限 | 说明 |
-|---|---|---|---|
-| GET | `/api/v1/classrooms` | 全部 | 教室列表 |
-| POST | `/api/v1/classrooms` | ADMIN | 新增教室 |
-| GET | `/api/v1/classrooms/{id}` | 全部 | 单个教室 |
-| PATCH | `/api/v1/classrooms/{id}` | ADMIN | 更新教室 |
-| DELETE | `/api/v1/classrooms/{id}` | ADMIN | 删除教室 |
-
-完整文档见启动后的 Swagger UI：http://localhost:8002/docs
 
 ---
 
@@ -291,12 +194,3 @@ GET /api/v1/schedule/entries?semester=2024-2025-1&teacher_id=T001
 
 ---
 
-## 8. 角色分工建议
-
-| 角色 | 主要工作文件 |
-|---|---|
-| **后端（API）** | `app/api/v1/`、`app/services/`、`app/schemas/`、`app/core/external_clients.py` |
-| **后端（算法）** | `app/algorithm/engine.py`、`app/tasks/scheduler_tasks.py` |
-| **前端** | 对接 `GET /api/v1/schedule/schedule-status/{task_id}` 实现进度轮询；对接 `GET /api/v1/schedule/entries` 展示课表 |
-| **测试** | `tests/` 目录（见下方测试文档） |
-| **运维** | `Dockerfile`、`docker-compose.yml`、`.env` |

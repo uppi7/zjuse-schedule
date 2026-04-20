@@ -137,17 +137,15 @@ async def get_schedule_entries(
 
 async def notify_downstream(semester: str, entries: list[ScheduleEntry]) -> None:
     """
-    通知下游子系统（智能选课组）排课结果已就绪。
+    排课完成后的下游通知。
 
-    TODO: [外部规范协商] 与第三组(智能选课组)确认通知方式：
-      方案A：通过 MQ（Redis Pub/Sub 或 Kafka）发送事件广播
-        - 事件格式：{"event": "schedule_ready", "semester": "...", "entry_count": N}
-      方案B：提供批量拉取 API，选课组自行 GET /api/v1/schedule/entries?semester=...
-        - 当前框架已实现此 API，选课组可直接调用
-
-    当前为占位实现，仅打印日志。
+    交付方式：拉取 API。
+    选课组（第三组）通过 GET /api/v1/schedule/entries?semester=<semester> 主动拉取，
+    本系统无需主动推送。
     """
-    print(
-        f"[notify_downstream] Semester {semester} schedule ready, "
-        f"{len(entries)} entries. TODO: 与第三组确认通知方式后实现。"
+    import logging
+    logging.getLogger(__name__).info(
+        "Schedule ready: semester=%s, entries=%d. "
+        "Downstream can pull via GET /api/v1/schedule/entries?semester=%s",
+        semester, len(entries), semester,
     )

@@ -29,8 +29,7 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        # aiomysql 异步驱动
-        return (
+            return (
             f"mysql+aiomysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}"
             f"@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}"
         )
@@ -40,8 +39,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: str = ""
 
-    # TODO: [外部规范协商] 与大组确认排课组占用的 Redis DB 编号，防止与其他子系统冲突。
-    # 当前占用 DB 2（Celery broker）和 DB 3（Celery result backend）。
+    # 排课组占用 Redis DB 2（Celery broker）和 DB 3（Celery result backend）
     CELERY_BROKER_DB: int = 2
     CELERY_RESULT_DB: int = 3
 
@@ -55,19 +53,18 @@ class Settings(BaseSettings):
         auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
         return f"redis://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.CELERY_RESULT_DB}"
 
-    # ── 上游微服务（基础信息组） ────────────────────────────────────────────
-    # TODO: [外部规范协商] 与第一组(基础信息组)确认内网服务名、端口和 URL 路径。
+    # ── 上游微服务（基础信息组，第一子系统）──────────────────────────────────
     INFO_SERVICE_BASE_URL: str = "http://info-service:8000"
     INFO_SERVICE_TEACHERS_PATH: str = "/api/v1/teachers"
     INFO_SERVICE_COURSES_PATH: str = "/api/v1/courses"
     INFO_SERVICE_CLASSROOMS_PATH: str = "/api/v1/classrooms"
 
-    # ── 认证 Header 字段名（网关透传） ────────────────────────────────────
-    # TODO: [外部规范协商] 与第一组及网关负责人确认 Header 字段名。
+    # ── 认证 Header 字段名（网关透传）────────────────────────────────────────
+    # 网关在转发请求时将已认证的用户信息写入以下 Header
     AUTH_HEADER_USER_ID: str = "X-User-Id"
     AUTH_HEADER_USER_ROLE: str = "X-User-Role"
 
-    # TODO: [外部规范协商] 确认"教务管理员"角色的 Role Code。
+    # 角色枚举值
     ROLE_ADMIN: str = "ADMIN"
     ROLE_TEACHER: str = "TEACHER"
     ROLE_STUDENT: str = "STUDENT"
@@ -75,7 +72,6 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """返回单例配置对象（进程生命周期内只初始化一次）。"""
     return Settings()
 
 

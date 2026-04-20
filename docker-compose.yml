@@ -1,13 +1,7 @@
 version: "3.9"
 
-# ── 本组独立测试编排文件 ──────────────────────────────────────────────────
-# 用途：排课组内部开发和联调，不涉及跨组集成。
-# 启动命令：docker compose up --build
-#
-# TODO: [外部规范协商] 全局集成时需与大组确认：
-#   1. 共享 Redis 的 Database 编号分配（当前占用 DB 2 和 DB 3）
-#   2. 全局 MySQL/Redis 的内部网络服务别名（当前：mysql / redis）
-#   3. 全局网络名称（当前：app-network，各子系统需加入同一网络）
+# 本组独立开发/测试编排文件。启动命令：docker compose up --build
+# 全局集成时各子系统加入同一个 app-network 即可互通。
 
 services:
 

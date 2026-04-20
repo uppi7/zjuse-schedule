@@ -12,13 +12,7 @@ from app.core.config import settings
 
 
 def get_current_user(request: Request) -> CurrentUser:
-    """
-    从网关透传的 Headers 中解析当前登录用户。
-    如果 Header 缺失，抛出 401。
-
-    TODO: [外部规范协商] 与第一组及网关负责人确认 Header 字段名和 Role Code 后
-    在 app/core/config.py 中更新 AUTH_HEADER_USER_ID / AUTH_HEADER_USER_ROLE。
-    """
+    """从网关透传的 Headers 中解析当前登录用户，Header 缺失时抛出 401。"""
     return parse_user_from_headers(request)
 
 
