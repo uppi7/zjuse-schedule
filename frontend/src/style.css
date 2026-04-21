@@ -1,0 +1,149 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #f5f5f5;
+  color: #333;
+}
+
+nav {
+  background: #1a73e8;
+  padding: 12px 24px;
+  display: flex;
+  gap: 20px;
+}
+
+nav a {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+}
+
+nav a.router-link-active {
+  border-bottom-color: #fff;
+}
+
+.page {
+  max-width: 800px;
+  margin: 32px auto;
+  padding: 0 16px;
+}
+
+h2 {
+  font-size: 1.4rem;
+  margin-bottom: 20px;
+  color: #1a73e8;
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+label {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+input {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  width: 200px;
+}
+
+input:focus {
+  outline: none;
+  border-color: #1a73e8;
+}
+
+button {
+  background: #1a73e8;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 20px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+button:disabled {
+  background: #aaa;
+  cursor: not-allowed;
+}
+
+.status-block {
+  margin-top: 20px;
+  background: #fff;
+  border-radius: 6px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.1);
+}
+
+.task-id {
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 10px;
+}
+
+.progress-bar {
+  background: #e8e8e8;
+  border-radius: 4px;
+  height: 16px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #1a73e8;
+  transition: width 0.4s ease;
+}
+
+.progress-fill.done { background: #34a853; }
+
+.error {
+  margin-top: 12px;
+  color: #d93025;
+  font-size: 0.9rem;
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,.1);
+}
+
+th {
+  background: #1a73e8;
+  color: #fff;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+td {
+  padding: 9px 12px;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #eee;
+}
+
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #f9f9f9; }

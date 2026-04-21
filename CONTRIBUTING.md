@@ -81,7 +81,6 @@ curl http://localhost:8002/health
 3. 将 Issue **assign 给自己**，表示已认领
 4. 把 Issue 状态从 `ready` 改为 `in-progress`
 
-> 同一时间只认领一个 Issue；预计超过 2 天的 Issue 请在评论中说明并拆分。
 
 ### 3.2 创建功能分支
 
@@ -353,6 +352,5 @@ docker push ghcr.io/uppi7/schedule-api:v0.1.0
 1. **所有开发工作必须关联 Issue**，无 Issue 的代码改动不予合并
 2. **数据库/Redis 镜像仅用于本组本地测试**，不向大组提交这部分配置
 3. **文档产出同步到飞书知识库**，代码内的 `docs/` 目录保留技术规范类文档
-4. **API 接口变更必须同步更新 Apifox**（或在 PR 中附上新的接口说明）
-5. **禁止直接 push 到 main**，所有改动走 PR 流程
-6. **Issue 模板已预设**，提 Issue 时填空即可，不要删除模板结构
+4. **禁止直接 push 到 main**，所有改动走 PR 流程
+5. **Issue 模板已预设**，提 Issue 时填空即可，不要删除模板结构
