@@ -61,13 +61,13 @@
 
 ### M0：基础设施就绪
 
-**#1 · 完成数据库初始迁移**
+**#1 · 验证数据库自动建表**
 - Label: `backend` `devops` `ready`
-- 背景：框架已有 SQLAlchemy 模型，需要初始化 Alembic 并生成首次迁移脚本，使 `docker compose up` 后表结构自动就绪。
+- 背景：API 启动时通过 `Base.metadata.create_all` 自动建表，无需手动执行迁移命令。
 - 验收标准：
-  - [ ] 执行 `alembic upgrade head` 后，`classrooms`、`schedule_tasks`、`schedule_entries` 三张表存在
-  - [ ] `docker-compose.yml` 中 `schedule-api` 启动时自动执行迁移（或写入启动脚本）
-- 实现提示：`alembic init alembic`，在 `env.py` 中引入 `app.core.database.Base`
+  - [ ] 执行 `docker compose up --build` 后，`classrooms`、`schedule_tasks`、`schedule_entries` 三张表自动存在
+  - [ ] 重复启动不会报错（`create_all` 已存在则跳过）
+- 实现提示：逻辑已在 `app/core/database.py → init_db()`，由 `app/main.py` 的 lifespan 调用
 
 ---
 
@@ -85,7 +85,7 @@
 
 **#3 · 实现教室创建与列表接口**
 - Label: `backend` `ready`
-- 背景：框架已有路由和 service 骨架，需补全 Alembic 迁移后的实际联调验证，并处理边界情况。
+- 背景：框架已有路由和 service 骨架，需补全实际联调验证并处理边界情况。
 - 验收标准：
   - [ ] `POST /api/v1/classrooms` 成功创建教室，重复 code 返回 409
   - [ ] `GET /api/v1/classrooms` 返回列表，支持 `skip`/`limit` 分页

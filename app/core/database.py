@@ -27,6 +27,13 @@ class Base(DeclarativeBase):
     pass
 
 
+async def init_db() -> None:
+    """应用启动时自动建表（不存在则创建，已存在则跳过）。"""
+    import app.models  # noqa: F401 — 确保所有 Model 已注册到 Base.metadata
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
 async def get_db() -> AsyncSession:
     """FastAPI 依赖：提供数据库 Session，请求结束后自动关闭。"""
     async with AsyncSessionLocal() as session:

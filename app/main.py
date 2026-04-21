@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.database import init_db
 from app.core.external_clients import close_info_client
 from app.api.v1 import classrooms, schedule
 
@@ -17,6 +18,7 @@ from app.api.v1 import classrooms, schedule
 async def lifespan(app: FastAPI):
     # ── 启动 ───────────────────────────────────────────────────────────
     print(f"[{settings.APP_NAME}] v{settings.APP_VERSION} starting up...")
+    await init_db()
     yield
     # ── 关闭 ───────────────────────────────────────────────────────────
     await close_info_client()
