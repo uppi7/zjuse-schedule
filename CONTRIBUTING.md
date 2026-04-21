@@ -324,7 +324,7 @@ interface ApiResponse<T> {
 ### 7.1 提交 PR 前的 Checklist
 
 ```
-□ 本地 pytest tests/ -v 全部通过
+□ 本地 make test 全部通过
 □ commit message 符合规范，包含 Closes #<issue号>
 □ 没有提交 .env 文件或包含密码的内容
 □ 没有留下调试用的 print() 或 console.log()
