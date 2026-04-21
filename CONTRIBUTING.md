@@ -58,18 +58,21 @@ cd zjuse-schedule
 # 复制环境变量（首次）
 cp .env.example .env
 
-# 启动 MySQL + Redis + API + Worker（全部容器）
-# --build 参数会触发镜像重建，仅首次启动加上
-docker compose up --build
+make build    # 首次：构建镜像并启动所有容器
+make health   # 验证 API 正常：{"status": "ok", ...}
+```
 
-# 验证启动成功
-curl http://localhost:8002/health
-# 期望输出：{"status": "ok", "service": "automatic-course-arrangement"}
+之后日常开发只需：
+
+```bash
+make up       # 启动
+make down     # 停止（数据保留）
+make logs-api # 查看 API 实时日志
 ```
 
 代码修改后 API 自动热重载（Uvicorn `--reload` 模式），无需重启容器。
 
-> API 文档：http://localhost:8002/docs　　查看容器日志：`docker compose logs -f schedule-api`
+> 完整命令列表：`make help`　　API 文档：http://localhost:8002/docs
 
 ---
 
@@ -195,7 +198,7 @@ curl "http://localhost:8002/api/v1/schedule/entries?semester=2024-2025-1" \
 **后端 PR 合并前，必须有对应的单元测试且全部通过。**
 
 ```bash
-pytest tests/ -v
+make test
 ```
 
 测试文件放在 `tests/` 目录，参考 `tests/test_classrooms.py` 的写法。
@@ -360,17 +363,10 @@ test(#16): add classroom permission tests
 每次向 main 合并后，需在本地运行完整集成测试：
 
 ```bash
-# 启动完整环境
-docker compose up --build -d
-
-# 等待健康检查通过
-sleep 10
-
-# 运行完整测试套件
-pytest tests/ -v --tb=short
-
-# 手动执行排课全链路冒烟测试
-bash tests/smoke_test.sh
+make build   # 重新构建镜像并启动所有容器
+make health  # 等待 API 就绪（{"status": "ok", ...}）
+make test    # 运行单元测试套件
+make smoke   # 排课全链路冒烟测试
 ```
 
 ### 8.2 打版本 Tag
@@ -404,16 +400,10 @@ Tag 命名规范：`v<major>.<minor>.<patch>`
 打 Tag 后，手动构建并推送（CI 自动化后无需手动）：
 
 ```bash
-# 后端镜像（根目录 Dockerfile）
-docker build -t schedule-api:v0.1.0 .
-docker tag schedule-api:v0.1.0 ghcr.io/uppi7/schedule-api:v0.1.0
-docker push ghcr.io/uppi7/schedule-api:v0.1.0
-
-# 前端镜像（frontend/Dockerfile，nginx + 静态文件）
-docker build -t schedule-frontend:v0.1.0 ./frontend
-docker tag schedule-frontend:v0.1.0 ghcr.io/uppi7/schedule-frontend:v0.1.0
-docker push ghcr.io/uppi7/schedule-frontend:v0.1.0
+make push VERSION=v0.1.0
 ```
+
+后端 + 前端镜像的构建、打 tag、推送。
 
 ---
 

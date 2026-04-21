@@ -40,17 +40,19 @@
 git clone git@github.com:uppi7/zjuse-schedule.git
 cd zjuse-schedule
 cp .env.example .env
-docker compose up --build
+make build       # 首次：构建镜像并启动
+make health      # 验证启动成功
 ```
 
 启动后访问：
 - 前端页面：http://localhost:5173
 - API 文档：http://localhost:8002/docs
-- 健康检查：http://localhost:8002/health
 
 ```bash
-docker compose down      # 停止（保留数据）
-docker compose down -v   # 停止并清除数据
+make up          # 日常启动开发
+make down        # 停止（保留数据）
+make reset       # 停止并清除数据
+make help        # 查看所有命令
 ```
 
 ---
@@ -102,6 +104,7 @@ zjuse-schedule/
 ├── CONTRIBUTING.md                 # 开发工作流（必读）
 ├── .env.example
 ├── Dockerfile
+├── Makefile                        # 常用命令封装
 └── docker-compose.yml
 ```
 
