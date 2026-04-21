@@ -59,6 +59,7 @@ cd zjuse-schedule
 cp .env.example .env
 
 # 启动 MySQL + Redis + API + Worker（全部容器）
+# --build 参数会触发镜像重建，仅首次启动加上
 docker compose up --build
 
 # 验证启动成功
@@ -155,7 +156,41 @@ X-User-Role: ADMIN
 5. 在 app/main.py 注册路由
 ```
 
-### 4.3 单元测试要求（PR 合并的门槛）
+### 4.3 端到端验证示例
+
+功能实现后，可用类似以下 curl 命令做端到端验证：
+
+```bash
+# 1. 创建教室
+curl -X POST http://localhost:8002/api/v1/classrooms \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: dev-admin-001" -H "X-User-Role: ADMIN" \
+  -d '{"code":"A101","name":"A座101","building":"A座","capacity":120,"room_type":"LECTURE"}'
+
+# 2. 触发排课
+curl -X POST http://localhost:8002/api/v1/schedule/auto-schedule \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: dev-admin-001" -H "X-User-Role: ADMIN" \
+  -d '{"semester":"2024-2025-1"}'
+# → 返回 {"data": {"task_id": "xxx-yyy-zzz", ...}}
+
+# 3. 查询排课进度（把上一步返回的 task_id 填入）
+curl http://localhost:8002/api/v1/schedule/schedule-status/<task_id> \
+  -H "X-User-Id: dev-admin-001" -H "X-User-Role: ADMIN"
+# → 等待 status 变为 SUCCESS
+
+# 4. 查看数据库是否写入（验证 _save_results 等 DB 逻辑）
+docker compose exec mysql mysql -uroot -prootpassword course_arrange \
+  -e "SELECT * FROM schedule_entries LIMIT 5;"
+
+# 5. 查询课表接口
+curl "http://localhost:8002/api/v1/schedule/entries?semester=2024-2025-1" \
+  -H "X-User-Id: dev-admin-001" -H "X-User-Role: ADMIN"
+```
+
+> 代码保存后 Uvicorn 自动热重载，无需重启容器，直接重新 curl 即可。
+
+### 4.4 单元测试要求（PR 合并的门槛）
 
 **后端 PR 合并前，必须有对应的单元测试且全部通过。**
 
@@ -187,7 +222,7 @@ frontend/src/
     └── ScheduleEntries.vue # Issue #10：课表查询表格
 ```
 
-`docker compose up --build` 启动后，前端服务自动运行于 **http://localhost:5173**，无需额外命令。
+`docker compose up` 启动后，前端服务自动运行于 **http://localhost:5173**，无需额外命令。
 
 ### 5.2 开发新页面
 
