@@ -71,13 +71,14 @@
 
 ---
 
-**#2 · 验证 Docker Compose 四服务全部健康启动**
+**#2 · 验证 Docker Compose 五服务全部健康启动**
 - Label: `devops` `ready`
 - 背景：保证任何组员拉代码后执行 `docker compose up --build` 能得到一个可用的开发环境。
 - 验收标准：
-  - [ ] `mysql`、`redis`、`schedule-api`、`schedule-worker` 四个容器均为 `healthy` 或 `running`
+  - [ ] `mysql`、`redis`、`schedule-api`、`schedule-worker`、`schedule-frontend` 五个容器均为 `healthy` 或 `running`
   - [ ] `curl http://localhost:8002/health` 返回 `{"status": "ok"}`
   - [ ] Celery Worker 日志中出现 `ready` 字样，无报错
+  - [ ] 访问 `http://localhost:5173` 能看到前端页面
 
 ---
 
@@ -153,9 +154,10 @@
 - 验收标准：
   - [ ] 点击"触发排课"后，按钮变为禁用，进度条出现
   - [ ] 每 3 秒轮询一次进度，进度条实时更新
-  - [ ] 状态变为 SUCCESS 时，停止轮询并跳转/提示"排课完成"
+  - [ ] 状态变为 SUCCESS 时，停止轮询并提示"排课完成"
   - [ ] 状态变为 FAILED 时，显示错误信息
-- 实现提示：轮询 `GET /api/v1/schedule/schedule-status/{task_id}`，当 `status === "SUCCESS"` 时停止
+  - [ ] 重复触发同一学期时，界面提示 409 错误而非崩溃
+- 实现提示：骨架已在 `frontend/src/views/ScheduleTrigger.vue`，接口调用封装在 `frontend/src/api/index.js → api.triggerSchedule / api.getScheduleStatus`
 
 ---
 
@@ -164,8 +166,10 @@
 - 背景：展示排课结果，支持按学期、教师筛选，以表格或课程表视图呈现。
 - 验收标准：
   - [ ] 默认展示当前学期课表
-  - [ ] 支持按教师筛选
-  - [ ] 每条记录显示：课程名、教师、教室、星期、节次、周次范围
+  - [ ] 支持按教师ID、课程ID筛选
+  - [ ] 每条记录显示：课程ID、教师ID、教室ID、星期、节次、周次范围
+  - [ ] 无数据时显示友好提示，不显示空表格
+- 实现提示：骨架已在 `frontend/src/views/ScheduleEntries.vue`，接口调用封装在 `frontend/src/api/index.js → api.getEntries`
 
 ---
 

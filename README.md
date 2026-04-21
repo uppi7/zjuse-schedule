@@ -30,7 +30,7 @@
                                     结果写 MySQL，进度存 Redis
 ```
 
-**技术栈：** FastAPI · Celery · Redis · MySQL · SQLAlchemy asyncio · Pydantic v2 · httpx · Docker
+**技术栈：** FastAPI · Celery · Redis · MySQL · SQLAlchemy asyncio · Pydantic v2 · httpx · Vue 3 · Vite · Docker
 
 ---
 
@@ -44,6 +44,7 @@ docker compose up --build
 ```
 
 启动后访问：
+- 前端页面：http://localhost:5173
 - API 文档：http://localhost:8002/docs
 - 健康检查：http://localhost:8002/health
 
@@ -58,7 +59,7 @@ docker compose down -v   # 停止并清除数据
 
 ```
 zjuse-schedule/
-├── app/
+├── app/                            # 后端（FastAPI）
 │   ├── main.py                     # FastAPI 入口
 │   ├── api/v1/
 │   │   ├── classrooms.py           # 教室 CRUD
@@ -76,6 +77,17 @@ zjuse-schedule/
 │   └── tasks/
 │       ├── celery_app.py           # Celery 配置
 │       └── scheduler_tasks.py      # 异步排课任务
+├── frontend/                       # 前端（Vue 3 + Vite）
+│   ├── package.json
+│   ├── vite.config.js              # dev server :5173，/api 代理至后端
+│   ├── index.html
+│   └── src/
+│       ├── api/index.js            # 统一 fetch 封装（含认证 Header）
+│       ├── router/index.js         # Vue Router 路由表
+│       ├── App.vue                 # 顶部导航
+│       └── views/
+│           ├── ScheduleTrigger.vue # 触发排课 + 进度条（Issue #9）
+│           └── ScheduleEntries.vue # 课表查询表格（Issue #10）
 ├── tests/
 │   ├── conftest.py                 # pytest fixtures（SQLite 内存库）
 │   ├── test_classrooms.py
@@ -109,6 +121,6 @@ bash tests/smoke_test.sh
 
 | 文档 | 内容 |
 |---|---|
-| [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) | 如何添加接口、编写测试、使用 Alembic |
+| [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) | 如何添加后端接口、前端页面、编写测试 |
 | [docs/DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | 数据库表结构与跨组 JSON 格式 |
 | [docs/ISSUE_PLAN.md](docs/ISSUE_PLAN.md) | 全部待办 Issue 及认领建议 |

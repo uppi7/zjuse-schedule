@@ -172,25 +172,55 @@ pytest tests/ -v
 
 ## 5. 前端开发规范
 
-### 5.1 用 Mock 数据独立开发
+### 5.1 项目结构
 
-前端开发**不等待后端接口完成**，使用 Mock 数据并行开发。
-
-推荐工具：[Apifox](https://apifox.com/) — 可直接从 `http://localhost:8002/docs` 导入 OpenAPI 规范生成 Mock Server。
+前端代码位于 `frontend/` 目录，技术栈：**Vue 3 + Vite**。
 
 ```
-http://localhost:8002/openapi.json   ← 导入此地址到 Apifox
+frontend/src/
+├── api/index.js            # 统一 fetch 封装，含认证 Header 和 /api 路径
+├── router/index.js         # 路由表（添加新页面在此注册）
+├── App.vue                 # 顶部导航栏
+├── style.css               # 全局样式
+└── views/
+    ├── ScheduleTrigger.vue # Issue #9：触发排课 + 进度条
+    └── ScheduleEntries.vue # Issue #10：课表查询表格
 ```
 
-### 5.2 接口对接规范
+`docker compose up --build` 启动后，前端服务自动运行于 **http://localhost:5173**，无需额外命令。
 
-所有请求需携带认证 Header：
+### 5.2 开发新页面
+
+1. 在 `frontend/src/views/` 新建 `XxxPage.vue`
+2. 在 `frontend/src/router/index.js` 添加路由：
+   ```javascript
+   { path: '/xxx', component: () => import('../views/XxxPage.vue') }
+   ```
+3. （可选）在 `frontend/src/App.vue` 导航栏里添加链接
+4. 接口调用统一通过 `frontend/src/api/index.js`，按已有模式追加方法
+
+### 5.3 接口调用规范
+
+`src/api/index.js` 已封装认证 Header 和错误处理，直接调用即可：
 
 ```javascript
-// 开发阶段固定值
-headers: {
-  'X-User-Id': 'dev-user-001',
-  'X-User-Role': 'ADMIN'   // 或 TEACHER / STUDENT
+import { api } from '../api'
+
+// 示例：触发排课
+const res = await api.triggerSchedule('2024-2025-1')
+const taskId = res.data.task_id
+
+// 示例：查询课表
+const res = await api.getEntries({ semester: '2024-2025-1', teacher_id: 'T001' })
+```
+
+**添加新接口调用**：在 `src/api/index.js` 的 `api` 对象中追加：
+
+```javascript
+export const api = {
+  // ... 已有方法 ...
+  getClassrooms: (params) =>
+    request('GET', `/api/v1/classrooms?${new URLSearchParams(params)}`),
 }
 ```
 
@@ -204,25 +234,18 @@ interface ApiResponse<T> {
 }
 ```
 
-### 5.3 排课进度轮询示例
+### 5.4 用 Mock 数据独立开发（后端未就绪时）
 
-```javascript
-async function pollScheduleStatus(taskId) {
-  const interval = setInterval(async () => {
-    const res = await fetch(`/api/v1/schedule/schedule-status/${taskId}`, {
-      headers: { 'X-User-Id': userId, 'X-User-Role': role }
-    });
-    const { data } = await res.json();
+后端接口未完成时，用 [Apifox](https://apifox.com/) 生成 Mock Server：
 
-    updateProgressBar(data.progress);   // 0-100
-
-    if (data.status === 'SUCCESS' || data.status === 'FAILED') {
-      clearInterval(interval);
-      handleCompletion(data);
-    }
-  }, 3000);   // 每 3 秒轮询一次
-}
-```
+1. 在 Apifox 导入 `http://localhost:8002/openapi.json`（后端启动后可访问）
+2. 启用 Mock Server，得到形如 `http://127.0.0.1:4523/m1/...` 的地址
+3. 临时修改 `frontend/src/api/index.js` 顶部：
+   ```javascript
+   const BASE = 'http://127.0.0.1:4523/m1/...'   // 临时 mock 地址
+   // 将 fetch(path, ...) 改为 fetch(BASE + path, ...)
+   ```
+   联调完成后改回。也可以通过修改 `vite.config.js` 的 proxy target 实现，无需改业务代码。
 
 ---
 

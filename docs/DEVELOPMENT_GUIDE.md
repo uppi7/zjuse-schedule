@@ -214,7 +214,69 @@ async def teacher_client(db_session):
 
 ---
 
-## 七、数据库建表
+## 七、前端开发
+
+前端技术栈：**Vue 3 + Vite**，代码位于 `frontend/`。`docker compose up` 后访问 http://localhost:5173。
+
+### 添加新页面
+
+```
+1. frontend/src/views/NewPage.vue   — 新建页面组件
+2. frontend/src/router/index.js     — 注册路由
+3. frontend/src/App.vue             — 导航栏加链接（可选）
+4. frontend/src/api/index.js        — 追加接口调用方法（如需）
+```
+
+**页面模板：**
+
+```vue
+<script setup>
+import { ref, onMounted } from 'vue'
+import { api } from '../api'
+
+const data = ref([])
+async function load() {
+  const res = await api.someMethod()
+  data.value = res.data
+}
+onMounted(load)
+</script>
+
+<template>
+  <div class="page">
+    <h2>页面标题</h2>
+    <!-- 内容 -->
+  </div>
+</template>
+```
+
+**注册路由（`router/index.js`）：**
+
+```javascript
+{ path: '/new-page', component: () => import('../views/NewPage.vue') }
+```
+
+### 添加新接口调用
+
+在 `frontend/src/api/index.js` 的 `api` 对象末尾追加：
+
+```javascript
+export const api = {
+  // ... 已有方法 ...
+  getClassrooms: () => request('GET', '/api/v1/classrooms'),
+  createClassroom: (body) => request('POST', '/api/v1/classrooms', body),
+}
+```
+
+`request` 函数已自动携带认证 Header，无需在页面组件里重复处理。
+
+### 修改后热更新
+
+前端文件修改后 Vite 自动热更新，**无需重启容器**，刷新浏览器即可看到效果。
+
+---
+
+## 八、数据库建表
 
 项目使用 `Base.metadata.create_all` 在 API 启动时自动建表，无需手动迁移命令。
 
@@ -237,3 +299,9 @@ A: `docker compose restart schedule-api`（启动时 `init_db()` 自动建表）
 
 **Q: 测试报 `no event loop`？**  
 A: 确认 `pytest.ini` 中有 `asyncio_mode = auto`，且 `pytest-asyncio` 已安装。
+
+**Q: 前端页面空白或 `/api` 请求 404？**  
+A: 确认后端容器已启动（`docker compose ps`）。Vite proxy 把 `/api` 转发到 `schedule-api:8000`，后端不起则所有接口报错。
+
+**Q: 前端修改后没有更新？**  
+A: Vite 热更新有时需要手动刷新浏览器。如果还是不生效，检查 `docker compose logs schedule-frontend` 是否有编译错误。
