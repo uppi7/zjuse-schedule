@@ -216,7 +216,14 @@ async def teacher_client(db_session):
 
 ## 七、前端开发
 
-前端技术栈：**Vue 3 + Vite**，代码位于 `frontend/`。`docker compose up` 后访问 http://localhost:5173。
+前端技术栈：**Vue 3 + Vite**，代码位于 `frontend/`。
+
+| 模式 | 说明 | 访问地址 |
+|---|---|---|
+| 开发（docker compose） | Vite dev server，支持热更新 | http://localhost:5173 |
+| 生产（frontend/Dockerfile） | nginx 服务编译产物，用于最终镜像提交 | :80 |
+
+日常开发直接 `docker compose up --build`，访问 http://localhost:5173 即可。
 
 ### 添加新页面
 
@@ -273,6 +280,19 @@ export const api = {
 ### 修改后热更新
 
 前端文件修改后 Vite 自动热更新，**无需重启容器**，刷新浏览器即可看到效果。
+
+### 生产镜像构建
+
+`frontend/Dockerfile` 使用多阶段构建：node 编译 → nginx 服务。
+
+```bash
+# 本地验证生产镜像是否正常
+docker build -t schedule-frontend:local ./frontend
+docker run -p 8080:80 schedule-frontend:local
+# 访问 http://localhost:8080（需后端同时运行）
+```
+
+nginx 通过 `frontend/nginx.conf` 配置：`/api/` 请求代理至 `schedule-api:8000`，其余路径走 SPA fallback。
 
 ---
 

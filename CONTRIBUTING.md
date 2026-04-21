@@ -357,15 +357,27 @@ Tag 命名规范：`v<major>.<minor>.<patch>`
 
 ### 8.3 镜像构建与推送
 
-打 Tag 后，手动执行镜像构建（CI 自动化后无需手动）：
+**向大组提交的镜像只有两个：**
+
+| 镜像 | 说明 |
+|---|---|
+| `ghcr.io/uppi7/schedule-api` | FastAPI 后端（API + Celery Worker 共用同一镜像） |
+| `ghcr.io/uppi7/schedule-frontend` | Vue3 前端（nginx 服务静态文件，内置 `/api` 反向代理） |
+
+> MySQL 和 Redis 是本组**本地测试专用**，不向大组提交。大组集成时由统一基础设施提供。
+
+打 Tag 后，手动构建并推送（CI 自动化后无需手动）：
 
 ```bash
-# 构建镜像
+# 后端镜像（根目录 Dockerfile）
 docker build -t schedule-api:v0.1.0 .
-
-# 推送到 GitHub Container Registry
 docker tag schedule-api:v0.1.0 ghcr.io/uppi7/schedule-api:v0.1.0
 docker push ghcr.io/uppi7/schedule-api:v0.1.0
+
+# 前端镜像（frontend/Dockerfile，nginx + 静态文件）
+docker build -t schedule-frontend:v0.1.0 ./frontend
+docker tag schedule-frontend:v0.1.0 ghcr.io/uppi7/schedule-frontend:v0.1.0
+docker push ghcr.io/uppi7/schedule-frontend:v0.1.0
 ```
 
 ---

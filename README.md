@@ -78,6 +78,8 @@ zjuse-schedule/
 │       ├── celery_app.py           # Celery 配置
 │       └── scheduler_tasks.py      # 异步排课任务
 ├── frontend/                       # 前端（Vue 3 + Vite）
+│   ├── Dockerfile                  # 生产镜像：node 构建 → nginx 服务
+│   ├── nginx.conf                  # SPA 路由 + /api 反向代理
 │   ├── package.json
 │   ├── vite.config.js              # dev server :5173，/api 代理至后端
 │   ├── index.html
