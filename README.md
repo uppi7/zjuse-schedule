@@ -1,196 +1,114 @@
-# 自动排课子系统（Automatic Course Arrangement）
+# 自动排课子系统
 
-
-## 目录
-
-1. [系统概述](#1-系统概述)
-2. [技术栈](#2-技术栈)
-3. [目录结构](#3-目录结构)
-4. [快速启动](#4-快速启动)
-5. [开发指南](#5-开发指南)
-6. [API 接口说明](#6-api-接口说明)
-7. [跨组协商待办事项](#7-跨组协商待办事项-重要)
-8. [角色分工建议](#8-角色分工建议)
+大型软件工程教学服务系统 · 第二子系统
 
 ---
 
-## 1. 系统概述
+## 功能概览
 
-本子系统负责根据课程、教师、教室数据，**自动生成排课结果**，并支持教务管理员手动调课。
+根据教室、教师、课程数据，自动生成全学期课表，并支持人工微调。
 
-### 核心功能
-
-| 功能 | 描述 |
+| 接口 | 说明 |
 |---|---|
-| 自动排课 | 异步触发排课算法，生成全学期课表 |
-| 排课状态查询 | 实时轮询排课进度（0-100%） |
-| 手动调课 | 对排课结果进行人工微调 |
-| 课表查询 | 按学期/教师/课程查询课表 |
-| 教室管理 | 教室 CRUD，维护教室容量和类型信息 |
+| `POST /api/v1/schedule/auto-schedule` | 触发排课（异步，立即返回 task_id） |
+| `GET /api/v1/schedule/schedule-status/{task_id}` | 查询排课进度 0–100% |
+| `POST /api/v1/schedule/manual-adjust` | 手动调课 |
+| `GET /api/v1/schedule/entries` | 查询课表（按学期/教师/课程筛选） |
+| `CRUD /api/v1/classrooms` | 教室管理 |
 
-### 架构说明
+## 架构
 
 ```
-前端 → [API Gateway] → FastAPI (schedule-api:8002)
-                            │
-                            ├── 同步请求（教室 CRUD、课表查询）→ MySQL
-                            │
-                            └── 触发排课 → Celery Worker ─→ 排课算法
-                                              │
-                                              ├── 结果写入 MySQL
-                                              └── 进度存储 Redis
+前端 ──→ [API Gateway] ──→ FastAPI (8002)
+                               │
+                ┌──────────────┴──────────────┐
+                ↓                             ↓
+        同步（教室/课表查询）         触发排课 → Celery Worker
+                ↓                             ↓
+              MySQL                    排课算法（CPU 密集）
+                                              ↓
+                                    结果写 MySQL，进度存 Redis
 ```
 
-排课采用**异步解耦**架构：
-- 触发接口立即返回 `task_id`（不阻塞）
-- 前端通过 `task_id` 轮询进度
-- Worker 进程独立执行 CPU 密集型算法
+**技术栈：** FastAPI · Celery · Redis · MySQL · SQLAlchemy asyncio · Pydantic v2 · httpx · Docker
 
 ---
 
-## 2. 技术栈
+## 快速启动
 
-| 层次 | 技术 | 版本 |
-|---|---|---|
-| Web 框架 | FastAPI | 0.111 |
-| ASGI 服务器 | Uvicorn | 0.29 |
-| 异步任务 | Celery | 5.4 |
-| 消息队列/缓存 | Redis | 7 |
-| ORM | SQLAlchemy (asyncio) | 2.0 |
-| 数据库 | MySQL | 8.0 |
-| 数据校验 | Pydantic v2 | 2.7 |
-| 跨服务 HTTP | httpx | 0.27 |
-| 容器化 | Docker / Docker Compose | - |
+```bash
+git clone git@github.com:uppi7/zjuse-schedule.git
+cd zjuse-schedule
+cp .env.example .env
+docker compose up --build
+```
+
+启动后访问：
+- API 文档：http://localhost:8002/docs
+- 健康检查：http://localhost:8002/health
+
+```bash
+docker compose down      # 停止（保留数据）
+docker compose down -v   # 停止并清除数据
+```
 
 ---
 
-## 3. 目录结构
+## 目录结构
 
 ```
 zjuse-schedule/
 ├── app/
-│   ├── main.py                    # FastAPI 入口，路由注册，生命周期管理
-│   ├── api/
-│   │   ├── dependencies.py        # 依赖注入（当前用户、权限校验）
-│   │   └── v1/
-│   │       ├── classrooms.py      # 教室 CRUD 接口
-│   │       └── schedule.py        # 排课触发、进度查询、调课接口
+│   ├── main.py                     # FastAPI 入口
+│   ├── api/v1/
+│   │   ├── classrooms.py           # 教室 CRUD
+│   │   └── schedule.py             # 排课接口
 │   ├── core/
-│   │   ├── config.py              # 环境变量配置（Pydantic Settings）
-│   │   ├── database.py            # SQLAlchemy 异步引擎与 Session
-│   │   ├── security.py            # 解析网关透传 Header
-│   │   └── external_clients.py    # httpx 跨服务调用封装
-│   ├── models/
-│   │   ├── classroom.py           # 教室数据表
-│   │   └── schedule.py            # 排课任务、课表条目数据表
-│   ├── schemas/
-│   │   ├── response.py            # 统一响应格式 {code, msg, data}
-│   │   ├── classroom.py           # 教室 DTO
-│   │   └── schedule.py            # 排课相关 DTO
-│   ├── services/
-│   │   ├── classroom_service.py   # 教室业务逻辑
-│   │   └── schedule_service.py    # 排课业务逻辑
+│   │   ├── config.py               # 环境变量（Pydantic Settings）
+│   │   ├── database.py             # SQLAlchemy 异步引擎
+│   │   ├── security.py             # 网关 Header 解析
+│   │   └── external_clients.py     # 调用基础信息组（httpx）
+│   ├── models/                     # 数据表定义
+│   ├── schemas/                    # Pydantic DTO
+│   ├── services/                   # 业务逻辑
 │   ├── algorithm/
-│   │   └── engine.py              # 排课算法引擎入口（算法组在此实现）
+│   │   └── engine.py               # 排课算法入口（算法组实现此文件）
 │   └── tasks/
-│       ├── celery_app.py          # Celery 实例初始化
-│       └── scheduler_tasks.py     # 排课 Celery Task 定义
-├── .env.example                   # 环境变量模板
-├── requirements.txt
+│       ├── celery_app.py           # Celery 配置
+│       └── scheduler_tasks.py      # 异步排课任务
+├── tests/
+│   ├── conftest.py                 # pytest fixtures（SQLite 内存库）
+│   ├── test_classrooms.py
+│   └── smoke_test.sh               # 集成冒烟测试
+├── docs/
+│   ├── DEVELOPMENT_GUIDE.md        # 技术开发手册
+│   ├── DATA_SCHEMA.md              # 数据库表与跨系统 JSON 契约
+│   ├── ISSUE_PLAN.md               # GitHub Issue 规划
+│   └── NEGOTIATION_CHECKLIST.md    # 跨组约定记录
+├── CONTRIBUTING.md                 # 开发工作流（必读）
+├── .env.example
 ├── Dockerfile
 └── docker-compose.yml
 ```
 
 ---
 
-## 4. 快速启动
+## 开发
 
-### 前提条件
-
-- Docker 已安装并运行
-- `git clone` 本仓库后 `cd zjuse-schedule`
-
-
-### 步骤
+**首先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)**，包含完整工作流：领取 Issue → 开发 → 测试 → PR → Code Review → 合并。
 
 ```bash
-# 1. 复制环境变量模板
-cp .env.example .env
-
-# 2. 一键启动所有服务（MySQL + Redis + API + Worker）
-docker compose up --build
-
-# 3. 访问交互式 API 文档
-# 浏览器打开：http://localhost:8002/docs
-
-# 4. 健康检查
-curl http://localhost:8002/health
-```
-
-### 停止服务
-
-```bash
-docker compose down          # 停止但保留数据
-docker compose down -v       # 停止并清除 volume 数据
-```
-
----
-
-## 5. 开发指南
-
-### 数据库迁移（Alembic）
-
-```bash
-# 初始化（首次）
-alembic init alembic
-
-# 生成迁移脚本
-alembic revision --autogenerate -m "init tables"
-
-# 执行迁移
-alembic upgrade head
-```
-
-### 运行测试
-
-```bash
+# 运行单元测试（无需启动 Docker）
 pytest tests/ -v
+
+# 集成冒烟测试（需 docker compose up 后执行）
+bash tests/smoke_test.sh
 ```
 
+其他参考文档：
 
----
-
-## 7. 跨组协商待办事项（重要）
-
-> 以下事项需在开发开始前与相关小组确认，**影响核心接口联调**。
-
-### 🔴 与第一组（基础信息组）协商
-
-| 编号 | 事项 | 当前假设值 | 配置位置 |
-|---|---|---|---|
-| P1-1 | 教师 API 的内网服务名、端口、URL 路径 | `http://info-service:8000/api/v1/teachers` | `.env` → `INFO_SERVICE_*` |
-| P1-2 | 课程 API 的内网服务名、端口、URL 路径 | `http://info-service:8000/api/v1/courses` | `.env` → `INFO_SERVICE_*` |
-| P1-3 | 教师 API 返回的 JSON 字段结构 | `[{"teacher_id":"T001","name":"张三"}]` | `external_clients.py` |
-| P1-4 | 课程 API 返回的 JSON 字段结构 | `[{"course_id":"C001","student_count":50}]` | `external_clients.py` |
-| P1-5 | 网关透传用户 ID 的 Header 字段名 | `X-User-Id` | `.env` → `AUTH_HEADER_USER_ID` |
-| P1-6 | 网关透传用户角色的 Header 字段名 | `X-User-Role` | `.env` → `AUTH_HEADER_USER_ROLE` |
-| P1-7 | "教务管理员"角色的 Role Code | `ADMIN` | `.env` → `ROLE_ADMIN` |
-
-### 🔴 与第三组（智能选课组）协商
-
-| 编号 | 事项 | 说明 |
-|---|---|---|
-| P3-1 | 排课结果的交付方式 | 方案A：MQ 事件广播；方案B：提供批量拉取 API（框架已实现 `GET /api/v1/schedule/entries`） |
-| P3-2 | 若选方案A，确认 MQ 类型和事件格式 | Redis Pub/Sub 还是 Kafka？事件字段定义？ |
-
-### 🟡 与大组协商
-
-| 编号 | 事项 | 当前假设值 | 配置位置 |
-|---|---|---|---|
-| PM-1 | 排课组全局业务错误码号段 | `2000-2099` | `schemas/response.py` → `BizCode` |
-| PM-2 | 排课组占用 Redis DB 编号 | DB 2（broker）、DB 3（result） | `.env` → `CELERY_*_DB` |
-| PM-3 | 全局集成时 MySQL/Redis 内网服务别名 | `mysql` / `redis` | `.env` → `MYSQL_HOST` / `REDIS_HOST` |
-| PM-4 | 本子系统的 Docker 内网端口 | API 对外 8002 | `docker-compose.yml` |
-
----
-
+| 文档 | 内容 |
+|---|---|
+| [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) | 如何添加接口、编写测试、使用 Alembic |
+| [docs/DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | 数据库表结构与跨组 JSON 格式 |
+| [docs/ISSUE_PLAN.md](docs/ISSUE_PLAN.md) | 全部待办 Issue 及认领建议 |
