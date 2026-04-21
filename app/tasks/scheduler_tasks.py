@@ -86,13 +86,23 @@ async def _fetch_upstream_data() -> tuple[list, list, list]:
     """
     从基础信息组和本地 DB 拉取排课所需数据。
     TODO: 替换为真实的 InfoServiceClient 调用和 DB 查询。
-    """
-    from app.core.external_clients import get_info_client
 
-    client = get_info_client()
+    注意：此函数通过 asyncio.run() 调用，每次都在新 event loop 中执行，
+    因此不能复用 FastAPI 进程的 httpx 单例（连接池绑定旧 loop 会报错）。
+    这里用 async with 在函数内部创建短生命周期的 client。
+    """
+    import httpx
+    from app.core.config import settings
+
     try:
-        teachers = await client.get_all_teachers()
-        courses = await client.get_all_courses()
+        async with httpx.AsyncClient(base_url=settings.INFO_SERVICE_BASE_URL, timeout=10.0) as client:
+            t_resp = await client.get(settings.INFO_SERVICE_TEACHERS_PATH)
+            t_resp.raise_for_status()
+            teachers = t_resp.json()["data"]
+
+            c_resp = await client.get(settings.INFO_SERVICE_COURSES_PATH)
+            c_resp.raise_for_status()
+            courses = c_resp.json()["data"]
     except Exception as e:
         logger.warning(f"Failed to fetch from info service, using stub data: {e}")
         # Fallback stub 数据，便于在上游未就绪时独立测试
