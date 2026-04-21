@@ -5,6 +5,7 @@ uvicorn[standard]==0.29.0
 # Async ORM & DB
 sqlalchemy[asyncio]==2.0.30
 aiomysql==0.2.0
+cryptography==42.0.8
 
 # Pydantic settings
 pydantic==2.7.1
