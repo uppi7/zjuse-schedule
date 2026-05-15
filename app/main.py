@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.core.external_clients import close_info_client
 from app.api.v1 import classrooms, schedule
 
 
@@ -21,7 +20,6 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
     # ── 关闭 ───────────────────────────────────────────────────────────
-    await close_info_client()
     print(f"[{settings.APP_NAME}] shut down.")
 
 

@@ -75,7 +75,7 @@ zjuse-schedule/
 │   ├── schemas/                    # Pydantic DTO
 │   ├── services/                   # 业务逻辑
 │   ├── algorithm/
-│   │   └── engine.py               # 排课算法入口（算法组实现此文件）
+│   │   └── engine.py               # 排课算法入口（TODO: 替换 stub 为真实算法）
 │   └── tasks/
 │       ├── celery_app.py           # Celery 配置
 │       └── scheduler_tasks.py      # 异步排课任务

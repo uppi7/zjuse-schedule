@@ -1,6 +1,6 @@
 """
 tests/test_classrooms.py
-教室接口测试（对应 Issue #16）。
+教室接口测试
 """
 
 import pytest
@@ -11,9 +11,11 @@ async def test_create_classroom(client: AsyncClient):
     resp = await client.post("/api/v1/classrooms", json={
         "code": "A101",
         "name": "A座101",
+        "campus": "西校区",
         "building": "A座",
         "capacity": 120,
         "room_type": "LECTURE",
+        "available_time": [{"day": 1, "slot": 1}, {"day": 1, "slot": 2}],
     })
     assert resp.status_code == 201
     assert resp.json()["code"] == 0
@@ -21,7 +23,15 @@ async def test_create_classroom(client: AsyncClient):
 
 
 async def test_create_classroom_duplicate_code(client: AsyncClient):
-    payload = {"code": "B202", "name": "B202", "building": "B座", "capacity": 80, "room_type": "LECTURE"}
+    payload = {
+        "code": "B202",
+        "name": "B202",
+        "campus": "东校区",
+        "building": "B座",
+        "capacity": 80,
+        "room_type": "LECTURE",
+        "available_time": [],
+    }
     await client.post("/api/v1/classrooms", json=payload)
     resp = await client.post("/api/v1/classrooms", json=payload)
     assert resp.status_code == 409
@@ -37,8 +47,10 @@ async def test_create_classroom_forbidden_for_student(student_client: AsyncClien
     resp = await student_client.post("/api/v1/classrooms", json={
         "code": "C303",
         "name": "C303",
-        "building": "C座",
+        "campus": "玉泉",
+        "building": "教七",
         "capacity": 60,
         "room_type": "LECTURE",
+        "available_time": [],
     })
     assert resp.status_code == 403

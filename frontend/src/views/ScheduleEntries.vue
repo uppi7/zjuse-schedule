@@ -1,4 +1,3 @@
-<!-- Issue #10: 课表查询页面 -->
 <script setup>
 import { ref, onMounted } from 'vue'
 import { api } from '../api'
@@ -11,6 +10,7 @@ const loading   = ref(false)
 const errorMsg  = ref('')
 
 const DAY_LABEL = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日']
+const PARITY_LABEL = { ALL: '', ODD: '（单周）', EVEN: '（双周）' }
 
 async function load() {
   loading.value  = true
@@ -62,11 +62,11 @@ onMounted(load)
       <tbody>
         <tr v-for="e in entries" :key="e.id">
           <td>{{ e.course_id }}</td>
-          <td>{{ e.teacher_id }}</td>
+          <td>{{ (e.teacher_ids || []).join(', ') }}</td>
           <td>{{ e.classroom_id }}</td>
           <td>{{ DAY_LABEL[e.day_of_week] }}</td>
           <td>第 {{ e.slot_start }}–{{ e.slot_end }} 节</td>
-          <td>第 {{ e.week_start }}–{{ e.week_end }} 周</td>
+          <td>第 {{ e.week_start }}–{{ e.week_end }} 周{{ PARITY_LABEL[e.week_parity] || '' }}</td>
         </tr>
       </tbody>
     </table>

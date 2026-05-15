@@ -168,7 +168,7 @@ X-User-Role: ADMIN
 curl -X POST http://localhost:8002/api/v1/classrooms \
   -H "Content-Type: application/json" \
   -H "X-User-Id: dev-admin-001" -H "X-User-Role: ADMIN" \
-  -d '{"code":"A101","name":"A座101","building":"A座","capacity":120,"room_type":"LECTURE"}'
+  -d '{"code":"A101","name":"A座101","campus":"玉泉","building":"教七","capacity":120,"room_type":"LECTURE","available_time":[]}'
 
 # 2. 触发排课
 curl -X POST http://localhost:8002/api/v1/schedule/auto-schedule \

@@ -34,7 +34,7 @@ echo "【2】教室创建"
 CODE=$(curl -sf -X POST "$BASE_URL/api/v1/classrooms" \
   -H "Content-Type: application/json" \
   -H "X-User-Id: smoke-admin" -H "X-User-Role: ADMIN" \
-  -d '{"code":"SMOKE01","name":"冒烟测试教室","building":"测试楼","capacity":50,"room_type":"LECTURE"}' \
+  -d '{"code":"SMOKE01","name":"冒烟测试教室","campus":"玉泉","building":"测试楼","capacity":50,"room_type":"LECTURE","available_time":[]}' \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['code'])" 2>/dev/null)
 [ "$CODE" = "0" ] && _pass "创建教室 SMOKE01" || _fail "创建教室 (code=$CODE)"
 
@@ -52,7 +52,7 @@ echo "【4】权限控制"
 HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/v1/classrooms" \
   -H "Content-Type: application/json" \
   -H "X-User-Id: smoke-student" -H "X-User-Role: STUDENT" \
-  -d '{"code":"X","name":"X","building":"X","capacity":10,"room_type":"LECTURE"}' 2>/dev/null || echo "403")
+  -d '{"code":"X","name":"X","campus":"玉泉","building":"X","capacity":10,"room_type":"LECTURE","available_time":[]}' 2>/dev/null || echo "403")
 [ "$HTTP_CODE" = "403" ] && _pass "STUDENT 被拦截返回 403" || _fail "权限拦截 (got: $HTTP_CODE)"
 
 # 5. 触发排课

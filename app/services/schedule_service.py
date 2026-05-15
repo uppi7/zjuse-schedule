@@ -107,8 +107,9 @@ async def manual_adjust(
             detail={"code": BizCode.TASK_NOT_FOUND, "msg": f"ScheduleEntry {req.entry_id} not found"},
         )
 
-    for field in ("new_classroom_id", "new_day_of_week", "new_slot_start", "new_slot_end",
-                  "new_week_start", "new_week_end"):
+    for field in ("new_teacher_ids", "new_classroom_id", "new_day_of_week",
+                  "new_slot_start", "new_slot_end",
+                  "new_week_start", "new_week_end", "new_week_parity"):
         value = getattr(req, field)
         if value is not None:
             attr = field.removeprefix("new_")
@@ -125,14 +126,18 @@ async def get_schedule_entries(
     teacher_id: str | None = None,
     course_id: str | None = None,
 ) -> list[ScheduleEntry]:
-    """查询课表条目，支持按学期/教师/课程筛选。"""
+    """
+    查询课表条目，支持按学期/教师/课程筛选。
+    teacher_id 是 JSON 数组的成员匹配，跨 MySQL/SQLite 兼容地在 Python 侧过滤。
+    """
     stmt = select(ScheduleEntry).where(ScheduleEntry.semester == semester)
-    if teacher_id:
-        stmt = stmt.where(ScheduleEntry.teacher_id == teacher_id)
     if course_id:
         stmt = stmt.where(ScheduleEntry.course_id == course_id)
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    entries = list(result.scalars().all())
+    if teacher_id:
+        entries = [e for e in entries if teacher_id in (e.teacher_ids or [])]
+    return entries
 
 
 async def notify_downstream(semester: str, entries: list[ScheduleEntry]) -> None:

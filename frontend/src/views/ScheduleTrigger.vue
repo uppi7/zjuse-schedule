@@ -1,4 +1,3 @@
-<!-- Issue #9: 触发排课 + 进度条页面 -->
 <script setup>
 import { ref, onUnmounted } from 'vue'
 import { api } from '../api'

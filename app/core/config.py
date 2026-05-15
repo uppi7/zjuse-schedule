@@ -54,10 +54,9 @@ class Settings(BaseSettings):
         return f"redis://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.CELERY_RESULT_DB}"
 
     # ── 上游微服务（基础信息组，第一子系统）──────────────────────────────────
+    # 子系统间默认互信，不走 Bearer/OAuth；通过 X-User-Id / X-User-Role 透传调用者身份。
     INFO_SERVICE_BASE_URL: str = "http://info-service:8000"
-    INFO_SERVICE_TEACHERS_PATH: str = "/api/v1/teachers"
     INFO_SERVICE_COURSES_PATH: str = "/api/v1/courses"
-    INFO_SERVICE_CLASSROOMS_PATH: str = "/api/v1/classrooms"
 
     # ── 认证 Header 字段名（网关透传）────────────────────────────────────────
     # 网关在转发请求时将已认证的用户信息写入以下 Header

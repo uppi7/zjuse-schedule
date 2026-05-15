@@ -4,7 +4,7 @@ app/schemas/schedule.py
 """
 
 from pydantic import BaseModel, Field
-from app.models.schedule import ScheduleStatus, DayOfWeek
+from app.models.schedule import ScheduleStatus, DayOfWeek, WeekParity
 
 
 # ── 触发排课 ──────────────────────────────────────────────────────────────
@@ -32,12 +32,14 @@ class ScheduleStatusResponse(BaseModel):
 
 class ManualAdjustRequest(BaseModel):
     entry_id: int = Field(..., description="ScheduleEntry 的 ID")
+    new_teacher_ids: list[str] | None = None
     new_classroom_id: int | None = None
     new_day_of_week: DayOfWeek | None = None
     new_slot_start: int | None = Field(default=None, ge=1, le=12)
     new_slot_end: int | None = Field(default=None, ge=1, le=12)
-    new_week_start: int | None = Field(default=None, ge=1, le=30)
-    new_week_end: int | None = Field(default=None, ge=1, le=30)
+    new_week_start: int | None = Field(default=None, ge=1, le=16)
+    new_week_end: int | None = Field(default=None, ge=1, le=16)
+    new_week_parity: WeekParity | None = None
 
 
 # ── 课表条目输出 ───────────────────────────────────────────────────────────
@@ -46,12 +48,13 @@ class ScheduleEntryOut(BaseModel):
     id: int
     semester: str
     course_id: str
-    teacher_id: str
+    teacher_ids: list[str]
     classroom_id: int
     day_of_week: DayOfWeek
     slot_start: int
     slot_end: int
     week_start: int
     week_end: int
+    week_parity: WeekParity
 
     model_config = {"from_attributes": True}
