@@ -4,9 +4,10 @@ app/core/security.py
 本系统不负责颁发或验证 JWT，仅消费网关已完成认证后写入 Header 的字段。
 """
 
-from fastapi import Request, HTTPException, status
+from fastapi import Request
 from dataclasses import dataclass
 from app.core.config import settings
+from app.schemas.response import BizCode, BizException
 
 
 @dataclass
@@ -30,14 +31,14 @@ def parse_user_from_headers(request: Request) -> CurrentUser:
     role = request.headers.get(settings.AUTH_HEADER_USER_ROLE)
 
     if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Missing required header: {settings.AUTH_HEADER_USER_ID}",
+        raise BizException(
+            BizCode.UNAUTHORIZED,
+            f"Missing required header: {settings.AUTH_HEADER_USER_ID}",
         )
     if not role:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Missing required header: {settings.AUTH_HEADER_USER_ROLE}",
+        raise BizException(
+            BizCode.UNAUTHORIZED,
+            f"Missing required header: {settings.AUTH_HEADER_USER_ROLE}",
         )
 
     return CurrentUser(user_id=user_id, role=role)

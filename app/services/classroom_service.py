@@ -5,19 +5,18 @@ app/services/classroom_service.py
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from fastapi import HTTPException, status
 
 from app.models.classroom import Classroom
 from app.schemas.classroom import ClassroomCreate, ClassroomUpdate
-from app.schemas.response import BizCode
+from app.schemas.response import BizCode, BizException
 
 
 async def create_classroom(db: AsyncSession, data: ClassroomCreate) -> Classroom:
     existing = await db.scalar(select(Classroom).where(Classroom.code == data.code))
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Classroom code '{data.code}' already exists",
+        raise BizException(
+            BizCode.GENERAL_ERROR,
+            f"Classroom code '{data.code}' already exists",
         )
     obj = Classroom(**data.model_dump())
     db.add(obj)
@@ -29,9 +28,9 @@ async def create_classroom(db: AsyncSession, data: ClassroomCreate) -> Classroom
 async def get_classroom(db: AsyncSession, classroom_id: int) -> Classroom:
     obj = await db.get(Classroom, classroom_id)
     if not obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": BizCode.CLASSROOM_NOT_FOUND, "msg": f"Classroom {classroom_id} not found"},
+        raise BizException(
+            BizCode.CLASSROOM_NOT_FOUND,
+            f"Classroom {classroom_id} not found",
         )
     return obj
 

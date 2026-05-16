@@ -3,25 +3,26 @@ app/api/dependencies.py
 FastAPI 通用依赖注入：当前用户、数据库 Session、权限校验。
 """
 
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import CurrentUser, parse_user_from_headers
 from app.core.config import settings
+from app.schemas.response import BizCode, BizException
 
 
 def get_current_user(request: Request) -> CurrentUser:
-    """从网关透传的 Headers 中解析当前登录用户，Header 缺失时抛出 401。"""
+    """从网关透传的 Headers 中解析当前登录用户，Header 缺失时抛出 BizException。"""
     return parse_user_from_headers(request)
 
 
 def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     """权限拦截：仅允许教务管理员操作。"""
     if not current_user.is_admin():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Required role: {settings.ROLE_ADMIN}, current role: {current_user.role}",
+        raise BizException(
+            BizCode.FORBIDDEN,
+            f"Required role: {settings.ROLE_ADMIN}, current role: {current_user.role}",
         )
     return current_user
 
@@ -29,8 +30,8 @@ def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> Curr
 def require_teacher_or_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     """权限拦截：教师或管理员均可操作。"""
     if not (current_user.is_admin() or current_user.is_teacher()):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Teacher or Admin role required",
+        raise BizException(
+            BizCode.FORBIDDEN,
+            "Teacher or Admin role required",
         )
     return current_user

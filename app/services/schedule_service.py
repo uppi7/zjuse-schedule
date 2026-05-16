@@ -5,7 +5,6 @@ app/services/schedule_service.py
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from fastapi import HTTPException, status
 from celery.result import AsyncResult
 
 from app.models.schedule import ScheduleTask, ScheduleEntry, ScheduleStatus
@@ -15,7 +14,7 @@ from app.schemas.schedule import (
     ScheduleStatusResponse,
     ScheduleEntryOut,
 )
-from app.schemas.response import BizCode
+from app.schemas.response import BizCode, BizException
 from app.tasks.celery_app import celery_app
 from app.tasks import scheduler_tasks
 
@@ -37,9 +36,9 @@ async def trigger_auto_schedule(
         )
     )
     if running:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"code": BizCode.TASK_ALREADY_RUNNING, "msg": "A schedule task for this semester is already running"},
+        raise BizException(
+            BizCode.TASK_ALREADY_RUNNING,
+            "A schedule task for this semester is already running",
         )
 
     # 推送到 Celery（不阻塞）
@@ -102,9 +101,9 @@ async def manual_adjust(
     """手动调课：修改单条 ScheduleEntry。"""
     entry = await db.get(ScheduleEntry, req.entry_id)
     if not entry:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": BizCode.TASK_NOT_FOUND, "msg": f"ScheduleEntry {req.entry_id} not found"},
+        raise BizException(
+            BizCode.TASK_NOT_FOUND,
+            f"ScheduleEntry {req.entry_id} not found",
         )
 
     for field in ("new_teacher_ids", "new_classroom_id", "new_day_of_week",

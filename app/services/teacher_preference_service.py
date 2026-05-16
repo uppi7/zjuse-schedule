@@ -4,7 +4,7 @@ app/services/teacher_preference_service.py
 
 所有写操作必须做 teacher_id 归属校验：
   - 读出目标行后比较 row.teacher_id 与传入 teacher_id；
-  - 不等则抛 HTTPException(403, BizCode.PERMISSION_DENIED)。
+  - 不等则抛 `raise BizException(BizCode.PERMISSION_DENIED, "...")`
 
 list_for_algorithm 是给 scheduler_tasks._fetch_upstream_data 调用的，
 返回 engine.TeacherPreference dataclass 列表（不返回 ORM 对象），

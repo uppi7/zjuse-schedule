@@ -4,12 +4,12 @@ FastAPI 应用入口：挂载路由、注册中间件、管理生命周期。
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import init_db
+from app.core.exception_handlers import register_exception_handlers
 from app.api.v1 import classrooms, schedule, teacher_preferences
 
 
@@ -44,12 +44,7 @@ app.add_middleware(
 
 # ── 全局异常处理 ───────────────────────────────────────────────────────────
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={"code": 2000, "msg": str(exc), "data": None},
-    )
+register_exception_handlers(app)
 
 # ── 路由注册 ───────────────────────────────────────────────────────────────
 
