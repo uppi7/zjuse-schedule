@@ -58,3 +58,12 @@ class ScheduleEntryOut(BaseModel):
     week_parity: WeekParity
 
     model_config = {"from_attributes": True}
+
+
+# ── 教师课表查询 ───────────────────────────────────────────────────────────
+
+class TeacherTimetableOut(BaseModel):
+    teacher_id: str
+    semester: str
+    week: int | None = None
+    entries: list[ScheduleEntryOut]

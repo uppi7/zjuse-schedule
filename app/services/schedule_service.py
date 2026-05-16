@@ -139,6 +139,25 @@ async def get_schedule_entries(
     return entries
 
 
+async def get_teacher_timetable(
+    db: AsyncSession,
+    teacher_id: str,
+    semester: str,
+    week: int | None = None,
+) -> list[ScheduleEntry]:
+    """
+    查询某教师在某学期的课表，可按 week 切片。
+
+    week 切片规则：
+      - entry.week_start <= week <= entry.week_end
+      - 且 entry.week_parity 满足：ALL=任意 / ODD=week 为奇数 / EVEN=week 为偶数
+    """
+    # TODO: 实现按 teacher_id + semester + 可选 week 的查询。
+    # 可复用 get_schedule_entries(db, semester, teacher_id=teacher_id) 的过滤逻辑，
+    # 再在 Python 侧按 week 与 week_parity 过滤
+    raise NotImplementedError("get_teacher_timetable: pending implementation")
+
+
 async def notify_downstream(semester: str, entries: list[ScheduleEntry]) -> None:
     """
     排课完成后的下游通知。

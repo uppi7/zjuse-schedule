@@ -31,4 +31,13 @@ export const api = {
   /** GET /api/v1/schedule/entries?semester=...&teacher_id=...&course_id=... */
   getEntries: (params) =>
     request('GET', `/api/v1/schedule/entries?${new URLSearchParams(params)}`),
+
+  /** POST /api/v1/schedule/manual-adjust → { data: ScheduleEntryOut } */
+  manualAdjust: (payload) =>
+    request('POST', '/api/v1/schedule/manual-adjust', payload),
+
+  /** GET /api/v1/schedule/teachers/:teacherId/timetable?semester=...&week=...
+   *  → { data: { teacher_id, semester, week, entries: ScheduleEntryOut[] } } */
+  getTeacherTimetable: (teacherId, params) =>
+    request('GET', `/api/v1/schedule/teachers/${teacherId}/timetable?${new URLSearchParams(params)}`),
 }

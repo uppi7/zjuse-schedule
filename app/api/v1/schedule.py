@@ -15,6 +15,7 @@ from app.schemas.schedule import (
     ScheduleStatusResponse,
     ManualAdjustRequest,
     ScheduleEntryOut,
+    TeacherTimetableOut,
 )
 from app.schemas.response import ApiResponse
 from app.services import schedule_service
@@ -99,3 +100,32 @@ async def get_schedule_entries(
         db, semester, teacher_id=teacher_id, course_id=course_id
     )
     return ApiResponse.ok(data=[ScheduleEntryOut.model_validate(e) for e in entries])
+
+
+@router.get(
+    "/teachers/{teacher_id}/timetable",
+    response_model=ApiResponse[TeacherTimetableOut],
+    summary="查询教师课表（可按周切片）",
+)
+async def get_teacher_timetable(
+    teacher_id: str,
+    semester: str = Query(..., description="学期，如 2024-2025-1"),
+    week: int | None = Query(default=None, ge=1, le=16, description="教学周，1-16；不传返回整学期"),
+    db: AsyncSession = Depends(get_db),
+    _user: CurrentUser = Depends(get_current_user),
+):
+    """
+    查询单个教师在指定学期的课表条目，可按教学周切片。
+    week 不传则返回整学期所有条目。
+    """
+    entries = await schedule_service.get_teacher_timetable(
+        db, teacher_id, semester, week=week
+    )
+    return ApiResponse.ok(
+        data=TeacherTimetableOut(
+            teacher_id=teacher_id,
+            semester=semester,
+            week=week,
+            entries=[ScheduleEntryOut.model_validate(e) for e in entries],
+        )
+    )
