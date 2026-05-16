@@ -4,9 +4,9 @@ app/algorithm/engine.py
 当前为占位实现（随机分配），TODO 替换为真实算法逻辑。
 
 算法输入：
-  - courses   : 待排课程列表（含教师、学生人数、周课时数等信息）
-  - teachers  : 教师可用时间段
-  - classrooms: 可用教室列表（含校区、容量、类型、基础可用时段）
+  - courses    : 待排课程列表（含教师、学生人数、周课时数等信息）
+  - classrooms : 可用教室列表（含校区、容量、类型、基础可用时段）
+  - preferences: 教师偏好列表（字段类比 ScheduleEntry，全可选，带 is_negative 极性）
 
 算法输出：
   - list[ScheduleResult] — 每条记录表示一门课的一个时段被分配到某教室
@@ -20,9 +20,10 @@ app/algorithm/engine.py
     5. 时段必须落在教室的 available_slots 内
     6. 跨校区课程不能排在同一教师相邻时段（可选）
   软约束（尽量满足，计入评分）：
-    1. 教师偏好时间段
-    2. 同专业课程尽量不冲突
-    3. 单天课程数量均匀分布
+    1. 教师偏好（preferences 中 is_negative=False 的条目，命中加分）
+    2. 教师禁忌（preferences 中 is_negative=True 的条目，命中扣分）
+    3. 同专业课程尽量不冲突
+    4. 单天课程数量均匀分布
 """
 
 import random
@@ -49,10 +50,26 @@ class ClassroomInput:
 
 
 @dataclass
-class TeacherAvailability:
+class TeacherPreference:
+    """
+    教师对"某门课 / 某种教室 / 某个时段 / 某段周次"的一条偏好。
+    除 teacher_id / semester / is_negative 外字段全可选。
+    匹配规则与权重由算法实现自定（is_negative=True 视作软扣分或硬约束由算法组决定）。
+    """
     teacher_id: str
-    # 可用时间：{(day_of_week, slot_start): True}
-    available_slots: set[tuple[int, int]]
+    semester: str
+    course_id: str | None = None
+    campus: str | None = None
+    building: str | None = None
+    classroom_code: str | None = None
+    room_type: str | None = None        # "LECTURE" / "LAB" / "GYM"
+    day_of_week: int | None = None      # 1-7
+    slot_start: int | None = None       # 1-12
+    slot_end: int | None = None         # 1-12
+    week_start: int | None = None       # 1-16
+    week_end: int | None = None         # 1-16
+    week_parity: str | None = None      # "ALL" / "ODD" / "EVEN"
+    is_negative: bool = False
 
 
 @dataclass
@@ -71,18 +88,22 @@ class ScheduleResult:
 def run_schedule(
     courses: list[CourseInput],
     classrooms: list[ClassroomInput],
-    teachers: list[TeacherAvailability],
+    preferences: list[TeacherPreference],
 ) -> tuple[list[ScheduleResult], list[str]]:
     """
     执行排课算法，返回 (成功分配的课表, 未能分配的 course_id 列表)。
 
     TODO: 用真实的启发式/遗传/回溯算法替换此 stub 实现。
-    当前 stub 行为：随机为每门课选一个满足容量约束的教室和时间段，不检查冲突。
+        - preferences 的匹配规则与软硬约束权重由算法实现自定。
+        - is_negative=True 的条目通常作为软扣分；如算法组决定按硬约束处理，
+          需在文档中明确并在评分函数中实现。
+    当前 stub 行为：随机为每门课选一个满足容量约束的教室和时间段，不检查冲突，
+    也不消费 preferences。
     """
     results: list[ScheduleResult] = []
     unscheduled: list[str] = []
 
-    teacher_map = {t.teacher_id: t for t in teachers}
+    _ = preferences  # 占位：算法接入时消费
 
     for course in courses:
         eligible_rooms = [

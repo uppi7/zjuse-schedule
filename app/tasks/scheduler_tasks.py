@@ -15,7 +15,7 @@ from celery.utils.log import get_task_logger
 
 from app.tasks.celery_app import celery_app
 from app.algorithm.engine import (
-    CourseInput, ClassroomInput, TeacherAvailability, ScheduleResult,
+    CourseInput, ClassroomInput, TeacherPreference, ScheduleResult,
 )
 
 logger = get_task_logger(__name__)
@@ -42,8 +42,11 @@ def run_auto_schedule(self, semester: str, triggered_by: str) -> dict:
     try:
         # ── Step 1: 拉取上游数据 ─────────────────────────────────────────
         self.update_state(state="PROGRESS", meta={"progress": 10, "message": "正在从基础信息组拉取数据..."})
-        courses, classrooms, teachers = asyncio.run(_fetch_upstream_data(semester, triggered_by))
-        logger.info(f"Fetched: courses={len(courses)}, classrooms={len(classrooms)}, teachers={len(teachers)}")
+        courses, classrooms, preferences = asyncio.run(_fetch_upstream_data(semester, triggered_by))
+        logger.info(
+            f"Fetched: courses={len(courses)}, classrooms={len(classrooms)}, "
+            f"preferences={len(preferences)}"
+        )
 
         # ── Step 2: 运行排课算法 ──────────────────────────────────────────
         self.update_state(state="PROGRESS", meta={"progress": 30, "message": "正在运行排课算法..."})
@@ -77,7 +80,7 @@ def run_auto_schedule(self, semester: str, triggered_by: str) -> dict:
 
 async def _fetch_upstream_data(
     semester: str, triggered_by: str
-) -> tuple[list[CourseInput], list[ClassroomInput], list[TeacherAvailability]]:
+) -> tuple[list[CourseInput], list[ClassroomInput], list[TeacherPreference]]:
     """
     TODO: 把上游数据装配成算法所需的 dataclass。
 
@@ -85,10 +88,10 @@ async def _fetch_upstream_data(
       semester     ── 当前学期，如 "2024-2025-1"
       triggered_by ── 触发排课的管理员 user_id，用于透传到第一组 X-User-Id
 
-    输出：三个列表，按位置返回 (courses, classrooms, teachers)
+    输出：三个列表，按位置返回 (courses, classrooms, preferences)
       courses      ── list[CourseInput]
       classrooms   ── list[ClassroomInput]
-      teachers     ── list[TeacherAvailability]
+      preferences  ── list[TeacherPreference]
 
     实现要点：
       1) 课程：用 InfoServiceClient(user_id=triggered_by, role="ADMIN") 调
@@ -106,12 +109,11 @@ async def _fetch_upstream_data(
              is_lab          ← row.room_type == ClassroomType.LAB
              available_slots ← {(d["day"], d["slot"]) for d in row.available_time}
          需用 asyncio 安全的临时 session（参考 app/core/database.py 的 AsyncSessionLocal）。
-      3) 教师可用时段：第一组不提供此数据，本期默认"全周可用"占位：
-             unique_teacher_ids = {tid for c in courses for tid in c.teacher_ids}
-             每个 teacher_id 构造 TeacherAvailability(
-                 teacher_id=tid,
-                 available_slots={(d, s) for d in range(1, 8) for s in range(1, 13)},
-             )
+      3) 教师偏好：调用
+             from app.services import teacher_preference_service
+             preferences = await teacher_preference_service.list_for_algorithm(db, semester)
+         该函数返回 list[engine.TeacherPreference]，直接作为第三返回值。
+         无偏好时返回空列表，算法应能容忍。
 
     错误处理：
       - 上游 4xx/5xx：raise，让 Celery 任务进入 FAILED

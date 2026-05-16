@@ -19,8 +19,8 @@ class Classroom(Base):
     __tablename__ = "classrooms"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, comment="教室编号，如 A101")
-    name: Mapped[str] = mapped_column(String(64), nullable=False, comment="教室名称")
+    code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, comment="教室编号，如 307表示3楼7号教室")
+    name: Mapped[str] = mapped_column(String(64), nullable=False, comment="教室名称，自由文本如音乐教一")
     campus: Mapped[str] = mapped_column(String(32), nullable=False, comment="所在校区")
     building: Mapped[str] = mapped_column(String(64), nullable=False, comment="所在楼栋")
     capacity: Mapped[int] = mapped_column(Integer, nullable=False, comment="额定容量（人数）")

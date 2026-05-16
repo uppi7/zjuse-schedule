@@ -55,6 +55,40 @@
 
 **周次约定**：一学期固定 16 周，前半学期 = 1-8 周，后半学期 = 9-16 周。半学期课通过 `week_start/week_end` 区间表达；单双周课通过 `week_parity` 在区间内进一步限定。
 
+### `teacher_preferences` — 教师排课偏好
+
+> 一行 = 教师对"某门课 / 某种教室 / 某个时段 / 某段周次"的一条偏好。
+> 除 `teacher_id`、`semester`、`is_negative` 外字段全可选。
+> `is_negative=True` 表示"不希望这样排"。匹配规则与软硬约束权重由排课算法实现自定，本表不定义。
+> 与 `schedule_tasks` 无外键；偏好是教师持久化设置，跨学期需重建。
+
+| 字段 | 类型 | 可空 | 说明 |
+|---|---|---|---|
+| id | INT PK | 否 | 自增主键 |
+| teacher_id | VARCHAR(32) | 否 | 第一组 teacher_id 字符串 |
+| semester | VARCHAR(16) | 否 | 学期，如 2024-2025-1 |
+| course_id | VARCHAR(32) | 是 | 作用课程；None=该教师在该学期所有课的通用偏好 |
+| campus | VARCHAR(32) | 是 | 校区，如 "玉泉" |
+| building | VARCHAR(64) | 是 | 楼栋，如 "教三" |
+| classroom_code | VARCHAR(32) | 是 | 对应 `classrooms.code`，非外键（容错） |
+| room_type | ENUM | 是 | LECTURE / LAB / GYM |
+| day_of_week | ENUM | 是 | 1=周一 … 7=周日 |
+| slot_start | INT | 是 | 起始节次 1-12 |
+| slot_end | INT | 是 | 结束节次 1-12 |
+| week_start | INT | 是 | 起始周次 1-16 |
+| week_end | INT | 是 | 结束周次 1-16 |
+| week_parity | ENUM | 是 | ALL / ODD / EVEN |
+| is_negative | BOOL | 否 | True=不希望这样排；默认 False |
+| created_at | DATETIME | 否 | 创建时间 |
+| updated_at | DATETIME | 否 | 更新时间 |
+
+**索引**：联合索引 `(teacher_id, semester)`，供按学期批量装配算法输入使用。
+
+**字段组合语义**：
+- `course_id` 留空：该偏好作用于该教师在该学期的所有课。
+- 教室四个字段（`campus` / `building` / `classroom_code` / `room_type`）可任意组合留空；全空 = 对教室无偏好。
+- 教室、时段、周次三组字段全部留空时，该偏好没有实际作用对象，应在 service 层校验拒绝（本期 TODO）。
+
 ---
 
 ## 二、跨系统数据契约

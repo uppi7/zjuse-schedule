@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.api.v1 import classrooms, schedule
+from app.api.v1 import classrooms, schedule, teacher_preferences
 
 
 @asynccontextmanager
@@ -57,6 +57,7 @@ API_PREFIX = "/api/v1"
 
 app.include_router(classrooms.router, prefix=API_PREFIX)
 app.include_router(schedule.router, prefix=API_PREFIX)
+app.include_router(teacher_preferences.router, prefix=API_PREFIX)
 
 
 @app.get("/health", tags=["健康检查"])
