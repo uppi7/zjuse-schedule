@@ -1,20 +1,12 @@
 # 自动排课子系统
 
-大型软件工程教学服务系统 · 第二子系统
-
----
+软件工程教学服务系统 · 第二子系统
 
 ## 功能概览
 
 根据教室、教师、课程数据，自动生成全学期课表，并支持人工微调。
 
-| 接口 | 说明 |
-|---|---|
-| `POST /api/v1/schedule/auto-schedule` | 触发排课（异步，立即返回 task_id） |
-| `GET /api/v1/schedule/schedule-status/{task_id}` | 查询排课进度 0–100% |
-| `POST /api/v1/schedule/manual-adjust` | 手动调课 |
-| `GET /api/v1/schedule/entries` | 查询课表（按学期/教师/课程筛选） |
-| `CRUD /api/v1/classrooms` | 教室管理 |
+> 完整接口与 schema 见 http://localhost:8002/docs。
 
 ## 架构
 
@@ -40,8 +32,7 @@
 git clone git@github.com:uppi7/zjuse-schedule.git
 cd zjuse-schedule
 cp .env.example .env
-make build       # 首次：构建镜像并启动
-make health      # 验证启动成功
+make build       # 首次：构建镜像并启动所有容器
 ```
 
 启动后访问：
@@ -49,9 +40,9 @@ make health      # 验证启动成功
 - API 文档：http://localhost:8002/docs
 
 ```bash
-make up          # 日常启动开发
+make up          # 日常启动
 make down        # 停止（保留数据）
-make reset       # 停止并清除数据
+make reset       # 停止并清除数据库
 make help        # 查看所有命令
 ```
 
@@ -63,69 +54,82 @@ make help        # 查看所有命令
 zjuse-schedule/
 ├── app/                            # 后端（FastAPI）
 │   ├── main.py                     # FastAPI 入口
-│   ├── api/v1/
-│   │   ├── classrooms.py           # 教室 CRUD
-│   │   └── schedule.py             # 排课接口
+│   ├── api/
+│   │   ├── dependencies.py         # 权限依赖（require_admin 等）
+│   │   └── v1/
+│   │       ├── classrooms.py       # 教室 CRUD
+│   │       ├── schedule.py         # 排课触发/状态/手动调整/查询
+│   │       └── teacher_preferences.py  # 教师偏好 CRUD
 │   ├── core/
 │   │   ├── config.py               # 环境变量（Pydantic Settings）
 │   │   ├── database.py             # SQLAlchemy 异步引擎
 │   │   ├── security.py             # 网关 Header 解析
+│   │   ├── exception_handlers.py   # 全局异常 → ApiResponse 渲染
 │   │   └── external_clients.py     # 调用基础信息组（httpx）
 │   ├── models/                     # 数据表定义
-│   ├── schemas/                    # Pydantic DTO
+│   ├── schemas/                    # Pydantic DTO（含 ApiResponse / BizCode / BizException）
 │   ├── services/                   # 业务逻辑
 │   ├── algorithm/
-│   │   └── engine.py               # 排课算法入口（TODO: 替换 stub 为真实算法）
+│   │   └── engine.py               # 排课算法入口（I/O 已锁定；TODO: 替换 stub 为真实算法）
 │   └── tasks/
 │       ├── celery_app.py           # Celery 配置
-│       └── scheduler_tasks.py      # 异步排课任务
-├── frontend/                       # 前端（Vue 3 + Vite）
+│       └── scheduler_tasks.py      # 异步排课任务（含上游拉取/落库占位）
+├── frontend/                       # 前端（Vue 3 + Vite + Element Plus + Pinia）
 │   ├── Dockerfile                  # 生产镜像：node 构建 → nginx 服务
 │   ├── nginx.conf                  # SPA 路由 + /api 反向代理
 │   ├── package.json
 │   ├── vite.config.js              # dev server :5173，/api 代理至后端
 │   ├── index.html
 │   └── src/
-│       ├── api/index.js            # 统一 fetch 封装（含认证 Header）
+│       ├── main.js
+│       ├── App.vue
+│       ├── style.css
+│       ├── api/
+│       │   ├── http.js             # axios 实例 + 拦截器（处理 ApiResponse）
+│       │   ├── modules/            # 按资源分模块的请求函数
+│       │   └── index.js            # barrel 再导出
 │       ├── router/index.js         # Vue Router 路由表
-│       ├── App.vue                 # 顶部导航
-│       └── views/
-│           ├── ScheduleTrigger.vue # 触发排课 + 进度条（Issue #9）
-│           └── ScheduleEntries.vue # 课表查询表格（Issue #10）
+│       ├── stores/auth.js          # Pinia store（当前用户）
+│       ├── layouts/                # 全局布局（侧边菜单 + 顶部 header）
+│       └── views/                  # 一页一目录，每个目录下 Index.vue
+│           ├── resources/          # 教室管理（占位）
+│           ├── preferences/        # 教师偏好（占位）
+│           ├── engine/             # 自动排课触发与进度（占位）
+│           ├── adjust/             # 手动调课（占位）
+│           └── timetable/          # 课表查询与打印（占位）
 ├── tests/
-│   ├── conftest.py                 # pytest fixtures（SQLite 内存库）
-│   ├── test_classrooms.py
-│   └── smoke_test.sh               # 集成冒烟测试
+│   ├── conftest.py                 # 根 fixture（client / student_client，SQLite in-memory）
+│   ├── factories.py                # 算法 dataclass 构造工厂
+│   ├── unit/                       # 无 Docker 依赖；marker: unit
+│   ├── solver/                     # 算法 golden case；marker: solver
+│   ├── integration/                # 跑测试栈；marker: integration
+│   └── e2e/                        # API 层端到端；marker: e2e / smoke
 ├── docs/
-│   ├── DEVELOPMENT_GUIDE.md        # 技术开发手册
-│   ├── DATA_SCHEMA.md              # 数据库表与跨系统 JSON 契约
-│   ├── ISSUE_PLAN.md               # GitHub Issue 规划
-│   └── NEGOTIATION_CHECKLIST.md    # 跨组约定记录
-├── CONTRIBUTING.md                 # 开发工作流（必读）
+│   ├── DEVELOPMENT_GUIDE.md        # 开发指南（工作流 + 技术约定 + 项目规范）
+│   └── DATA_SCHEMA.md              # 数据库表与跨系统 JSON 契约
+├── .github/workflows/test.yml      # CI（unit+solver 必过、integration+e2e 合入前过）
+├── CONTRIBUTING.md                 # 短桩，指向 docs/DEVELOPMENT_GUIDE.md
 ├── .env.example
 ├── Dockerfile
 ├── Makefile                        # 常用命令封装
-└── docker-compose.yml
+├── docker-compose.yml              # 开发栈
+├── docker-compose.test.yml         # 测试栈（端口隔离 8003/3308/6381）
+├── pyproject.toml
+├── pytest.ini
+├── requirements.txt
+└── requirements-test.txt
 ```
 
 ---
 
-## 开发
+## 开发指引
 
-**首先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)**，包含完整工作流：领取 Issue → 开发 → 测试 → PR → Code Review → 合并。
-
-```bash
-# 运行单元测试（无需启动 Docker）
-pytest tests/ -v
-
-# 集成冒烟测试（需 docker compose up 后执行）
-bash tests/smoke_test.sh
-```
+**首先阅读 [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md)**，包含完整的工作流、技术约定、项目规范。
 
 其他参考文档：
 
 | 文档 | 内容 |
 |---|---|
-| [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) | 如何添加后端接口、前端页面、编写测试 |
-| [docs/DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | 数据库表结构与跨组 JSON 格式 |
-| [docs/ISSUE_PLAN.md](docs/ISSUE_PLAN.md) | 全部待办 Issue 及认领建议 |
+| [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) | 工作流 + 技术约定 + ApiResponse / 异常 / 权限规范 |
+| [docs/DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | 数据库表结构与跨组 JSON 契约 |
+| http://localhost:8002/docs | 完整接口列表与请求/响应 schema |
