@@ -55,6 +55,17 @@ make help       # 列出所有命令
 - OpenAPI JSON：http://localhost:8002/openapi.json
 - 前端：http://localhost:5173
 
+### 1.1 （可选）Linter
+
+项目用 VSCode 扩展自带的 Ruff（Python lint + format）和 Prettier（前端 format）。
+
+1. VSCode 打开项目，右下角弹"安装推荐扩展"点确定；或手动装：
+   - `charliermarsh.ruff`
+   - `esbenp.prettier-vscode`
+   - `Vue.volar`
+2. 保存代码（Ctrl+S）即自动整理 import、格式化、修小毛病
+3. 要改linter规则去改 [`pyproject.toml`](../pyproject.toml) / [`frontend/.prettierrc`](../frontend/.prettierrc) 即可
+
 ---
 
 ## 2. 项目结构
