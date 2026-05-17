@@ -13,6 +13,8 @@ from app.algorithm.engine import (
     CourseInput,
     ClassroomInput,
     TeacherPreference,
+    RoomRequirement,
+    RoomType,
 )
 
 
@@ -22,8 +24,7 @@ def make_course(**overrides) -> CourseInput:
         course_id="C001",
         teacher_ids=["T001"],
         student_count=30,
-        weekly_hours=2,
-        needs_lab=False,
+        room_requirements=[RoomRequirement(RoomType.LECTURE, 2)],
     )
     defaults.update(overrides)
     return CourseInput(**defaults)
@@ -35,7 +36,7 @@ def make_classroom(**overrides) -> ClassroomInput:
         classroom_id=1,
         campus="玉泉",
         capacity=60,
-        is_lab=False,
+        room_type=RoomType.LECTURE,
         available_slots={(d, s) for d in range(1, 6) for s in range(1, 13)},
     )
     defaults.update(overrides)
@@ -56,15 +57,26 @@ def make_preference(**overrides) -> TeacherPreference:
 def make_minimal_solver_input() -> tuple[
     list[CourseInput], list[ClassroomInput], list[TeacherPreference]
 ]:
-    """3 课 / 2 教室 / 0 偏好的最小可解输入，用于 smoke 级 solver 测试。"""
+    """4 课 / 2 教室 / 0 偏好的最小可解输入，用于 smoke 级 solver 测试。
+    C004 是混合课（讲授 + 实验），用于验证 room_requirements 多项能力。"""
     courses = [
         make_course(course_id="C001", teacher_ids=["T001"], student_count=30),
         make_course(course_id="C002", teacher_ids=["T002"], student_count=50),
-        make_course(course_id="C003", teacher_ids=["T003"], student_count=20, needs_lab=True),
+        make_course(
+            course_id="C003", teacher_ids=["T003"], student_count=20,
+            room_requirements=[RoomRequirement(RoomType.LAB_CHEMISTRY, 2)],
+        ),
+        make_course(
+            course_id="C004", teacher_ids=["T004"], student_count=40,
+            room_requirements=[
+                RoomRequirement(RoomType.LECTURE, 2),
+                RoomRequirement(RoomType.LAB_CHEMISTRY, 2),
+            ],
+        ),
     ]
     classrooms = [
-        make_classroom(classroom_id=1, capacity=60, is_lab=False),
-        make_classroom(classroom_id=2, capacity=80, is_lab=True),
+        make_classroom(classroom_id=1, capacity=60, room_type=RoomType.LECTURE),
+        make_classroom(classroom_id=2, capacity=80, room_type=RoomType.LAB_CHEMISTRY),
     ]
     preferences: list[TeacherPreference] = []
     return courses, classrooms, preferences

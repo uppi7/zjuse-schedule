@@ -16,6 +16,7 @@ from celery.utils.log import get_task_logger
 from app.tasks.celery_app import celery_app
 from app.algorithm.engine import (
     CourseInput, ClassroomInput, TeacherPreference, ScheduleResult,
+    RoomRequirement, RoomType,
 )
 
 logger = get_task_logger(__name__)
@@ -96,17 +97,17 @@ async def _fetch_upstream_data(
     实现要点：
       1) 课程：用 InfoServiceClient(user_id=triggered_by, role="ADMIN") 调
          get_all_courses(semester)；得到的 dict 字段映射到 CourseInput：
-             course_id     ← dict["course_id"]
-             teacher_ids   ← [dict["teacher_id"]]    # 上游目前单教师，包成一元列表
-             student_count ← dict["student_count"]
-             weekly_hours  ← dict["weekly_hours"]
-             needs_lab     ← dict["needs_lab"]
+             course_id         ← dict["course_id"]
+             teacher_ids       ← [dict["teacher_id"]]    # 上游目前单教师，包成一元列表
+             student_count     ← dict["student_count"]
+             room_requirements ← [RoomRequirement(RoomType(item["room_type"]), item["hours"])
+                                  for item in dict["room_requirements"]]
          记得 try/finally 调 client.aclose()。
       2) 教室：从本地 Classroom 表查 is_active=True 的全部行，映射到 ClassroomInput：
              classroom_id    ← row.id
              campus          ← row.campus
              capacity        ← row.capacity
-             is_lab          ← row.room_type == ClassroomType.LAB
+             room_type       ← RoomType(row.room_type.value)    # DB ClassroomType → 算法 RoomType
              available_slots ← {(d["day"], d["slot"]) for d in row.available_time}
          需用 asyncio 安全的临时 session（参考 app/core/database.py 的 AsyncSessionLocal）。
       3) 教师偏好：调用

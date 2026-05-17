@@ -10,9 +10,12 @@ import enum
 
 
 class ClassroomType(str, enum.Enum):
-    LECTURE = "LECTURE"       # 普通教室
-    LAB = "LAB"               # 实验室
-    GYM = "GYM"               # 体育场馆
+    LECTURE       = "LECTURE"       # 普通教室
+    LAB_PHYSICS   = "LAB_PHYSICS"   # 物理实验室
+    LAB_CHEMISTRY = "LAB_CHEMISTRY" # 化学实验室
+    LAB_BIOLOGY   = "LAB_BIOLOGY"   # 生物实验室
+    COMPUTER_LAB  = "COMPUTER_LAB"  # 机房
+    GYM           = "GYM"           # 体育场馆
 
 
 class Classroom(Base):

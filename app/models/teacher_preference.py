@@ -46,7 +46,7 @@ class TeacherPreference(Base):
         comment="对应 classrooms.code，非外键（容错：教师可能填不存在或已禁用的 code）",
     )
     room_type: Mapped[ClassroomType | None] = mapped_column(
-        SAEnum(ClassroomType), nullable=True, comment="LECTURE / LAB / GYM"
+        SAEnum(ClassroomType), nullable=True, comment="取值见 ClassroomType 枚举"
     )
 
     # 时段粒度

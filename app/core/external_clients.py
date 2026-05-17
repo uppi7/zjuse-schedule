@@ -34,13 +34,16 @@ class InfoServiceClient:
       {"code": 0, "msg": "success", "data": [...] | {...}}
 
     课程列表每条记录字段（**算法必需，第一组返回这些字段**）：
-      course_id     : str    课程唯一标识
-      name          : str    课程名称
-      teacher_id    : str    主讲教师 ID（合上课暂按单教师处理）
-      semester      : str    学期标识，如 "2024-2025-1"
-      weekly_hours  : int    每周课时数
-      student_count : int    选课人数
-      needs_lab     : bool   是否需要实验室
+      course_id         : str    课程唯一标识
+      name              : str    课程名称
+      teacher_id        : str    主讲教师 ID（合上课暂按单教师处理）
+      semester          : str    学期标识，如 "2024-2025-1"
+      student_count     : int    选课人数
+      room_requirements : list   每周分房间类型的学时需求，每项：
+                                 {"room_type": "LECTURE"|"LAB_PHYSICS"|"LAB_CHEMISTRY"|
+                                                "LAB_BIOLOGY"|"COMPUTER_LAB"|"GYM"|...,
+                                  "hours": int}
+                                 取值权威定义见 ClassroomType；新增类型时两端同步
     """
 
     def __init__(self, user_id: str, role: str) -> None:

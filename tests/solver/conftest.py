@@ -9,7 +9,9 @@ Golden case 目录结构：
 
 input.json 字段对应 app/algorithm/engine.py 中的 dataclass：
     courses     : list[CourseInput]
+                  room_requirements 用 [{"room_type": <RoomType 取值>, "hours": int}, ...]
     classrooms  : list[ClassroomInput]    # available_slots 用 [[d, s], ...] 表示
+                  room_type 取值见 RoomType 枚举（LECTURE / LAB_* / COMPUTER_LAB / GYM）
     preferences : list[TeacherPreference]
 
 expected.json 字段（断言对照）：
@@ -28,6 +30,8 @@ from app.algorithm.engine import (
     ClassroomInput,
     TeacherPreference,
     ScheduleResult,
+    RoomRequirement,
+    RoomType,
 )
 
 GOLDEN_ROOT = Path(__file__).parent / "fixtures" / "golden"
@@ -66,13 +70,24 @@ def load_golden_case(case_dir: Path) -> tuple[SolverInput, SolverExpected]:
     raw_input = json.loads(input_path.read_text(encoding="utf-8"))
     raw_expected = json.loads(expected_path.read_text(encoding="utf-8"))
 
-    courses = [CourseInput(**c) for c in raw_input.get("courses", [])]
+    courses = [
+        CourseInput(
+            course_id=c["course_id"],
+            teacher_ids=c["teacher_ids"],
+            student_count=c["student_count"],
+            room_requirements=[
+                RoomRequirement(RoomType(r["room_type"]), r["hours"])
+                for r in c.get("room_requirements", [])
+            ],
+        )
+        for c in raw_input.get("courses", [])
+    ]
     classrooms = [
         ClassroomInput(
             classroom_id=c["classroom_id"],
             campus=c["campus"],
             capacity=c["capacity"],
-            is_lab=c.get("is_lab", False),
+            room_type=RoomType(c.get("room_type", "LECTURE")),
             available_slots={tuple(s) for s in c.get("available_slots", [])},
         )
         for c in raw_input.get("classrooms", [])

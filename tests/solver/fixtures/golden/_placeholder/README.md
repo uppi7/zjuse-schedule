@@ -16,8 +16,9 @@
       "course_id": "C001",
       "teacher_ids": ["T001"],   // list[str]，合上课多教师
       "student_count": 30,
-      "weekly_hours": 2,
-      "needs_lab": false
+      "room_requirements": [     // 每项 {room_type, hours}，hours 是每周总学时
+        {"room_type": "LECTURE", "hours": 2}
+      ]
     }
   ],
   "classrooms": [
@@ -25,7 +26,7 @@
       "classroom_id": 1,
       "campus": "玉泉",
       "capacity": 60,
-      "is_lab": false,
+      "room_type": "LECTURE",    // 取值见 RoomType 枚举（LECTURE / LAB_* / COMPUTER_LAB / GYM）
       "available_slots": [[1, 1], [1, 2], [2, 3]]  // [[day, slot], ...]
     }
   ],

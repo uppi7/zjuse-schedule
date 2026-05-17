@@ -16,7 +16,7 @@
 | campus | VARCHAR(32) | 所在校区，如"玉泉" |
 | building | VARCHAR(64) | 所在楼栋 |
 | capacity | INT | 额定容量 |
-| room_type | ENUM | LECTURE / LAB / GYM |
+| room_type | ENUM | LECTURE / LAB_PHYSICS / LAB_CHEMISTRY / LAB_BIOLOGY / COMPUTER_LAB / GYM |
 | available_time | JSON | 教室基础可用时段数组，元素 `{"day":1-7, "slot":1-12}`；与排课结果无关，表达此教室"原则上可被排课的窗口" |
 | is_active | BOOL | 是否可用 |
 
@@ -71,7 +71,7 @@
 | campus | VARCHAR(32) | 是 | 校区，如 "玉泉" |
 | building | VARCHAR(64) | 是 | 楼栋，如 "教三" |
 | classroom_code | VARCHAR(32) | 是 | 对应 `classrooms.code`，非外键（容错） |
-| room_type | ENUM | 是 | LECTURE / LAB / GYM |
+| room_type | ENUM | 是 | 取值见 `ClassroomType`（LECTURE / LAB_PHYSICS / LAB_CHEMISTRY / LAB_BIOLOGY / COMPUTER_LAB / GYM） |
 | day_of_week | ENUM | 是 | 1=周一 … 7=周日 |
 | slot_start | INT | 是 | 起始节次 1-12 |
 | slot_end | INT | 是 | 结束节次 1-12 |
@@ -122,9 +122,10 @@
       "name": "高等数学",
       "teacher_id": "T001",
       "semester": "2024-2025-1",
-      "weekly_hours": 4,
       "student_count": 60,
-      "needs_lab": false
+      "room_requirements": [
+        {"room_type": "LECTURE", "hours": 4}
+      ]
     }
   ]
 }
@@ -138,9 +139,8 @@
 | name | str | 课程名称 |
 | teacher_id | str | 主讲教师 ID；合上课暂按单教师处理 |
 | semester | str | 学期标识 |
-| weekly_hours | int | 每周课时数 |
 | student_count | int | 选课人数 |
-| needs_lab | bool | 是否需要实验室 |
+| room_requirements | list | 每周分房间类型的学时需求。每项 `{"room_type": <ClassroomType 取值>, "hours": int}`，当前枚举：`LECTURE` / `LAB_PHYSICS` / `LAB_CHEMISTRY` / `LAB_BIOLOGY` / `COMPUTER_LAB` / `GYM`（权威定义见 `ClassroomType`）。混合课（如理论课+实验课）使用多项；纯讲授课传单项即可。`hours == 0` 的项应被忽略或上游剔除。 |
 
 
 ### 2.3 向第三组提供：课表数据
