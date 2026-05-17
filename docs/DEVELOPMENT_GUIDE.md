@@ -1,327 +1,420 @@
-# 技术开发手册
+# 排课子系统 开发指南
 
-> **工作流程** 见根目录 [CONTRIBUTING.md](../CONTRIBUTING.md)。  
-> 本文档只记录技术层面的"怎么写代码"，不重复流程规范。
+> 本组组员唯一的开发入口文档。包含工作流 + 技术约定 + 项目规范。
+> 数据契约（表结构、跨系统字段约定）见 [DATA_SCHEMA.md](./DATA_SCHEMA.md)。
 
 ---
 
-## 一、后端：添加新接口
+## 目录
 
-按以下顺序创建文件，每步都有对应目录。
+1. [快速开始](#1-快速开始)
+2. [项目结构](#2-项目结构)
+3. [统一响应格式 ApiResponse](#3-统一响应格式-apiresponse)
+4. [异常与错误码约定](#4-异常与错误码约定)
+5. [权限与认证](#5-权限与认证)
+6. [后端：新增功能五步法](#6-后端新增功能五步法)
+7. [Celery 异步任务约定](#7-celery-异步任务约定)
+8. [前后端 API 契约](#8-前后端-api-契约)
+9. [前端约定](#9-前端约定)
+10. [测试约定](#10-测试约定)
+11. [Git / 分支 / 提交约定](#11-git--分支--提交约定)
+12. [PR 流程](#12-pr-流程)
+13. [FAQ](#13-faq)
 
-### Step 1 — Schema（DTO）
+---
 
-```python
-# app/schemas/xxx.py
-from pydantic import BaseModel, Field
-
-class XxxCreate(BaseModel):
-    name: str = Field(..., max_length=64)
-    value: int = Field(..., gt=0)
-
-class XxxOut(BaseModel):
-    id: int
-    name: str
-    value: int
-    model_config = {"from_attributes": True}
-```
-
-### Step 2 — Model（数据表，如需新表）
-
-```python
-# app/models/xxx.py
-from sqlalchemy.orm import Mapped, mapped_column
-from app.core.database import Base
-
-class Xxx(Base):
-    __tablename__ = "xxx_table"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str]
-    value: Mapped[int]
-```
-
-新增 model 后，在 `app/models/__init__.py` 加一行 import，重启 API 容器即可（`init_db()` 会自动建表）：
+## 1. 快速开始
 
 ```bash
-docker compose restart schedule-api
+# 首次
+cp .env.example .env
+make build
+
+# 日常
+make up         # 启动
+make down       # 停止（保留数据）
+make reset      # 停止并清空数据库
+make help       # 列出所有命令
 ```
 
-### Step 3 — Service（业务逻辑）
+代码改动会被 Uvicorn 的 `--reload` 自动热加载，无需重启容器。
 
-```python
-# app/services/xxx_service.py
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from fastapi import HTTPException, status
-from app.models.xxx import Xxx
-from app.schemas.response import BizCode
+**端口约定：**
 
-async def create_xxx(db: AsyncSession, data: XxxCreate) -> Xxx:
-    obj = Xxx(**data.model_dump())
-    db.add(obj)
-    await db.commit()
-    await db.refresh(obj)
-    return obj
+| 端口 | 服务 |
+|-----|------|
+| 8002 | FastAPI 后端 |
+| 5173 | Vue 前端（Vite dev server） |
+| 3307 | MySQL（开发栈） |
+| 6380 | Redis（开发栈） |
+| 8003 / 3308 / 6381 | 测试栈（`docker-compose.test.yml`） |
+
+**关键入口：**
+
+- API Swagger UI：http://localhost:8002/docs
+- OpenAPI JSON：http://localhost:8002/openapi.json
+- 前端：http://localhost:5173
+
+---
+
+## 2. 项目结构
+
+```
+schedule/
+├── app/                      # FastAPI 后端
+│   ├── algorithm/engine.py   # CP-SAT 算法入口（输入/输出 dataclass 已锁定）
+│   ├── api/v1/               # 路由
+│   ├── core/                 # config / database / exception_handlers / security
+│   ├── models/               # SQLAlchemy 模型
+│   ├── schemas/              # Pydantic DTO（含 ApiResponse / BizCode / BizException）
+│   ├── services/             # 业务逻辑
+│   └── tasks/                # Celery 任务（含算法链路）
+├── frontend/                 # Vue 3 + Vite + Element Plus + Pinia
+│   └── src/
+│       ├── api/http.js       # axios 实例 + 拦截器（处理 ApiResponse）
+│       ├── api/modules/*.js  # 按资源分模块的请求函数
+│       ├── views/            # 一页一目录
+│       ├── router/index.js
+│       └── stores/           # Pinia store
+├── tests/
+│   ├── unit/                 # SQLite in-memory，无 Docker 依赖
+│   ├── solver/               # 算法 golden case
+│   ├── integration/          # 跑测试栈（docker-compose.test.yml）
+│   └── e2e/                  # API 层端到端
+├── docs/
+│   ├── DEVELOPMENT_GUIDE.md  # 本文件
+│   └── DATA_SCHEMA.md        # 数据契约
+├── docker-compose.yml        # 开发栈
+├── docker-compose.test.yml   # 测试栈（端口隔离）
+├── Makefile
+└── .env.example
 ```
 
-### Step 4 — Router（路由）
+---
+
+## 3. 统一响应格式 ApiResponse
+
+定义：[`app/schemas/response.py`](../app/schemas/response.py)
+
+所有接口必须返回 `ApiResponse[T]`：
+
+```json
+// 成功
+{ "code": 0, "msg": "success", "data": { ... } }
+
+// 业务错误（HTTP 仍为 200）
+{ "code": 2003, "msg": "无权限执行此操作", "data": null }
+
+// 未捕获异常（HTTP 500，极少出现）
+{ "code": 2098, "msg": "...", "data": null }
+```
+
+**规则：**
+
+- 业务错误一律 **HTTP 200 + body.code≠0**，只有真未捕获异常才 5xx
+- 路由层用 `ApiResponse.ok(data=...)` 包装成功返回
+- 错误**不要**自己构造 ApiResponse —— 抛 `BizException`，由全局 handler 渲染（见 4.小节）
 
 ```python
-# app/api/v1/xxx.py
+from app.schemas.response import ApiResponse
+
+@router.get("/classrooms", response_model=ApiResponse[list[ClassroomOut]])
+async def list_classrooms(...):
+    items = await classroom_service.list_all(db)
+    return ApiResponse.ok(data=[ClassroomOut.model_validate(x) for x in items])
+```
+
+---
+
+## 4. 异常与错误码约定
+
+定义：[`app/schemas/response.py`](../app/schemas/response.py) · [`app/core/exception_handlers.py`](../app/core/exception_handlers.py)
+
+**业务异常统一抛 `BizException`，不 `raise HTTPException(...)`。**
+
+```python
+from app.schemas.response import BizException, BizCode
+
+if not classroom:
+    raise BizException(BizCode.CLASSROOM_NOT_FOUND, "教室不存在")
+```
+
+全局 handler 会把它渲染成 `HTTP 200 + ApiResponse.fail(code, msg, data)`。
+
+**错误码段位（排课组占用 2000–2099）：**
+
+| 码 | 含义 |
+|----|-----|
+| 0 | 成功 |
+| 2000 | 通用业务错误 |
+| 2001 | 教室不存在 |
+| 2002 | 排课任务未找到 |
+| 2003 | 无权限执行此操作 |
+| 2004 | 排课任务正在进行中，请勿重复触发 |
+| 2005 | 上游服务数据拉取失败 |
+| 2010 | 参数校验失败 |
+| 2011 | 未授权 |
+| 2012 | 禁止访问 |
+| 2013 | 资源不存在 |
+| 2098 | 服务内部错误 |
+| 2099 | 排课算法无解（约束冲突） |
+
+新增错误码：在 `BizCode` 类里加常量 + 在文件顶部 docstring 同步说明。
+
+**handler 行为：**
+
+| 异常类型 | 渲染结果 |
+|---------|---------|
+| `BizException` | HTTP 200 + `ApiResponse(code, msg, data)` |
+| `RequestValidationError` | HTTP 200 + code=2010 + data=errors() |
+| `HTTPException`（第三方/FastAPI 内部）| HTTP 200 + 按状态码映射业务码 |
+| 未捕获 `Exception` | HTTP 500 + code=2098 |
+
+---
+
+## 5. 权限与认证
+
+本服务不签发令牌，只消费网关透传的两个 header：
+
+```
+X-User-Id: <userId>
+X-User-Role: ADMIN | TEACHER | STUDENT
+```
+
+权限依赖（位于 `app/api/dependencies.py`）：
+
+| 依赖 | 允许角色 | 用法 |
+|------|---------|------|
+| `get_current_user` | 任意登录用户 | 查询接口 |
+| `require_admin` | ADMIN | 触发排课、教室增删改 |
+| `require_teacher_or_admin` | TEACHER + ADMIN | 教师写操作 |
+
+```python
+from app.api.dependencies import require_admin
+
+@router.post("/classrooms")
+async def create(..., _=Depends(require_admin)): ...
+```
+
+---
+
+## 6. 后端：新增功能的步骤
+
+```
+1. app/schemas/<resource>.py     — Pydantic DTO（Create / Update / Out）
+2. app/models/<resource>.py      — SQLAlchemy 模型（如需新表）
+3. app/services/<resource>_service.py  — 业务逻辑
+4. app/api/v1/<resource>.py      — 路由
+5. app/main.py 中 include_router — 注册
+```
+
+**Model 新增后**：要在 `app/models/__init__.py`  中import 过，再重启 API 容器即可（`init_db()` 启动时调 `Base.metadata.create_all`）。需要改字段执行：`make reset && make build`。
+
+**路由模板：**
+
+```python
 from fastapi import APIRouter, Depends
 from app.core.database import get_db
-from app.api.dependencies import get_current_user, require_admin
+from app.api.dependencies import require_admin
 from app.schemas.response import ApiResponse
-from app.services import xxx_service
+from app.schemas.foo import FooCreate, FooOut
+from app.services import foo_service
 
-router = APIRouter(prefix="/xxx", tags=["XXX模块"])
+router = APIRouter(prefix="/foo", tags=["Foo"])
 
-@router.post("", response_model=ApiResponse[XxxOut], status_code=201)
-async def create_xxx(data: XxxCreate, db=Depends(get_db), _=Depends(require_admin)):
-    obj = await xxx_service.create_xxx(db, data)
-    return ApiResponse.ok(data=XxxOut.model_validate(obj))
-```
-
-### Step 5 — 注册路由
-
-```python
-# app/main.py
-from app.api.v1 import xxx
-app.include_router(xxx.router, prefix=API_PREFIX)
+@router.post("", response_model=ApiResponse[FooOut])
+async def create_foo(data: FooCreate, db=Depends(get_db), _=Depends(require_admin)):
+    obj = await foo_service.create(db, data)
+    return ApiResponse.ok(data=FooOut.model_validate(obj))
 ```
 
 ---
 
-## 二、后端：错误处理
+## 7. Celery 异步任务约定
 
-**已知业务错误**（有对应错误码）：
+定义：[`app/tasks/celery_app.py`](../app/tasks/celery_app.py) · [`app/tasks/scheduler_tasks.py`](../app/tasks/scheduler_tasks.py)
+
+**模式：接口立即返回 task_id，不阻塞 HTTP；任务内汇报进度。**
 
 ```python
-from fastapi import HTTPException, status
-from app.schemas.response import BizCode
+# 接口层
+task = run_auto_schedule.delay(semester)
+return ApiResponse.ok(data={"task_id": task.id})
 
-raise HTTPException(
-    status_code=status.HTTP_404_NOT_FOUND,
-    detail={"code": BizCode.CLASSROOM_NOT_FOUND, "msg": "教室不存在"}
-)
+# 任务层
+@celery_app.task(bind=True, max_retries=2, default_retry_delay=30)
+def run_auto_schedule(self, semester: str):
+    self.update_state(state="PROGRESS", meta={"progress": 30, "message": "拉数据..."})
+    # ...
+    return {"result": ...}
 ```
 
-**需要新增错误码**时，在 `app/schemas/response.py` 的 `BizCode` 类中添加。排课组号段：2000–2099。
+**任务状态机：**`ScheduleTask` 表的 `status` 字段：
+
+```
+PENDING → RUNNING → SUCCESS
+                  → FAILED
+                  → PARTIAL   # 部分课无法排进，scheduled+unscheduled 都非空
+```
+
+**前端查进度**：`GET /api/v1/schedule/schedule-status/{task_id}` → 内部把 Celery state 映射到 `ScheduleStatus`。
 
 ---
 
-## 三、后端：权限控制
+## 8. 前后端 API 契约
 
-| 依赖函数 | 允许角色 | 使用场景 |
-|---|---|---|
-| `get_current_user` | 所有登录用户 | 查询类接口 |
-| `require_admin` | ADMIN 只 | 触发排课、创建/删除教室 |
-| `require_teacher_or_admin` | TEACHER + ADMIN | 教师相关写操作 |
+**唯一事实是 FastAPI 自动生成的 OpenAPI**
 
-```python
-# 查询接口（所有登录用户）
-@router.get("", ...)
-async def list_xxx(_user=Depends(get_current_user)): ...
+| 我想看 | 去哪里看 |
+|--------|---------|
+| 当前所有端点 + 请求/响应 schema | http://localhost:8002/docs （Swagger UI） |
+| 机器可读 schema | http://localhost:8002/openapi.json |
+| Pydantic 源 schema | `app/schemas/*.py` |
+| 错误码段位与含义 | `app/schemas/response.py` |
+| 数据库表结构 / 跨子系统数据契约 | `docs/DATA_SCHEMA.md` |
 
-# 写接口（仅管理员）
-@router.post("", ...)
-async def create_xxx(_admin=Depends(require_admin)): ...
+**前端的 http 拦截器行为**（[`frontend/src/api/http.js`](../frontend/src/api/http.js)）：
+
+- baseURL = `/api/v1`，超时 15s
+- 请求拦截器：自动注入 `X-User-Id` / `X-User-Role`（从 Pinia auth store）
+- 响应拦截器：
+  - 收到 `{code, msg, data}` 且 `code === 0` → 直接返回 `data`（**自动 unwrap**）
+  - 收到 `code !== 0` → Element Plus toast + 抛 `BizError`
+  - 网络异常 → toast `网络异常: <status>`
+
+**所以前端调用方写起来是这样：**
+
+```js
+import { listClassrooms } from '@/api/modules/classrooms'
+
+// 这里拿到的是 data 本体，不是 ApiResponse 包裹
+const rooms = await listClassrooms({ campus: '玉泉' })
 ```
+
+**新增前端请求的步骤**：在 `frontend/src/api/modules/<resource>.js` 里追加，按已有模式（`classrooms.js`、`schedule.js`、`teacherPreferences.js`）写。
 
 ---
 
-## 四、后端：Celery 异步任务
+## 9. 前端约定
 
-触发耗时任务（排课算法）的标准模式：
+**技术栈**：Vue 3 + Vite + Pinia + Vue Router + Element Plus + Axios（无 TypeScript，无 codegen）。
 
-```python
-# 接口层：立即返回 task_id，不阻塞
-celery_task = some_task.delay(arg1, arg2)
-return ApiResponse.ok(data={"task_id": celery_task.id})
+**目录约定：**
 
-# 任务层：汇报进度
-@celery_app.task(bind=True)
-def some_task(self, arg1, arg2):
-    self.update_state(state="PROGRESS", meta={"progress": 30, "message": "处理中..."})
-    # ... 执行逻辑 ...
-    return {"result": "done"}
+```
+frontend/src/
+├── api/http.js                  # axios 实例 + 拦截器
+├── api/modules/<resource>.js    # 按资源分文件，导出请求函数
+├── views/<page>/Index.vue       # 一页一目录
+├── router/index.js              # 路由表
+├── stores/auth.js               # Pinia store；按需建其他 store
+├── layouts/                     # 顶部/侧边导航等布局
+└── main.js
 ```
 
-查询进度：`celery.result.AsyncResult(task_id, app=celery_app).state`
+**新增页面流程：**
+
+```
+1. frontend/src/views/<feature>/Index.vue   — 新建页面组件
+2. frontend/src/router/index.js              — 注册路由
+3. frontend/src/api/modules/<resource>.js    — 追加请求函数（如需）
+4. （可选）frontend/src/stores/<feature>.js  — 需要跨组件共享状态时再建 Pinia store
+```
+
+**dev proxy**：`vite.config.js` 把 `/api` 转发到 `VITE_API_TARGET`（默认 `http://localhost:8002`）。所以前端代码里写 `/api/v1/...` 即可，开发/生产同源。
 
 ---
 
-## 五、后端：调用上游服务（基础信息组）
+## 10. 测试约定
 
-```python
-from app.core.external_clients import get_info_client
+**四层 marker（`pytest.ini`）：**
 
-client = get_info_client()
-teachers = await client.get_all_teachers()   # 返回 list[dict]
-courses  = await client.get_all_courses()
-```
+| marker | 跑什么 | 依赖 | 命令 |
+|--------|-------|------|------|
+| `unit` | 服务/接口的单元测试（SQLite in-memory + ASGITransport） | 无 Docker | `make test-unit` |
+| `solver` | 算法 golden case，直接调 `run_schedule()` | 无 Docker | `make test-solver` |
+| `integration` | API + Celery + 真实 MySQL/Redis | 测试栈 | `make test-integration` |
+| `e2e` | httpx 打测试栈 :8003 | 测试栈 | `make test-e2e` / `make test-smoke` |
 
-上游不可用时会抛出 `httpx.HTTPError`，在 Celery 任务中已有 fallback stub，开发阶段无需关心。
+**什么时候该写哪层？**
 
----
+- 改了 service 的纯逻辑或路由的参数校验 → `unit`
+- 改了 `run_schedule()` 或约束实现 → `solver`
+- 改了 Celery 任务 / 跨服务调用 / DB 事务 → `integration`
+- 改了前后端联动的完整业务流 → `e2e`
 
-## 六、测试：编写测试用例
+**fixture 在 `tests/conftest.py`**：`client`（ADMIN）、`student_client`（STUDENT）、`db_session`。需要别的角色就照样写一个 `teacher_client`。
 
-测试使用 SQLite 内存库，直接 `pytest tests/ -v` 即可，无需启动 MySQL。
-
-### 基础结构
-
-```python
-# tests/test_xxx.py
-import pytest
-from httpx import AsyncClient
-
-async def test_create_xxx(client: AsyncClient):          # ADMIN 角色
-    resp = await client.post("/api/v1/xxx", json={...})
-    assert resp.status_code == 201
-    assert resp.json()["code"] == 0
-
-async def test_create_xxx_forbidden(student_client: AsyncClient):  # STUDENT 角色
-    resp = await student_client.post("/api/v1/xxx", json={...})
-    assert resp.status_code == 403
-```
-
-### 可用 Fixture（定义在 `tests/conftest.py`）
-
-| Fixture | 说明 |
-|---|---|
-| `client` | ADMIN 角色的 HTTP 客户端 |
-| `student_client` | STUDENT 角色的 HTTP 客户端 |
-| `db_session` | 数据库 Session（每个测试后回滚） |
-
-### 需要其他角色时
-
-```python
-# tests/conftest.py 中添加
-@pytest.fixture
-async def teacher_client(db_session):
-    async def override_get_db():
-        yield db_session
-    app.dependency_overrides[get_db] = override_get_db
-    async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-        headers={"X-User-Id": "teacher-001", "X-User-Role": "TEACHER"},
-    ) as ac:
-        yield ac
-    app.dependency_overrides.clear()
-```
-
----
-
-## 七、前端开发
-
-前端技术栈：**Vue 3 + Vite**，代码位于 `frontend/`。
-
-| 模式 | 说明 | 访问地址 |
-|---|---|---|
-| 开发（docker compose） | Vite dev server，支持热更新 | http://localhost:5173 |
-| 生产（frontend/Dockerfile） | nginx 服务编译产物，用于最终镜像提交 | :80 |
-
-日常开发直接 `make up`（首次或修改 Dockerfile 后用 `make build`），访问 http://localhost:5173 即可。
-
-### 添加新页面
-
-```
-1. frontend/src/views/NewPage.vue   — 新建页面组件
-2. frontend/src/router/index.js     — 注册路由
-3. frontend/src/App.vue             — 导航栏加链接（可选）
-4. frontend/src/api/index.js        — 追加接口调用方法（如需）
-```
-
-**页面模板：**
-
-```vue
-<script setup>
-import { ref, onMounted } from 'vue'
-import { api } from '../api'
-
-const data = ref([])
-async function load() {
-  const res = await api.someMethod()
-  data.value = res.data
-}
-onMounted(load)
-</script>
-
-<template>
-  <div class="page">
-    <h2>页面标题</h2>
-    <!-- 内容 -->
-  </div>
-</template>
-```
-
-**注册路由（`router/index.js`）：**
-
-```javascript
-{ path: '/new-page', component: () => import('../views/NewPage.vue') }
-```
-
-### 添加新接口调用
-
-在 `frontend/src/api/index.js` 的 `api` 对象末尾追加：
-
-```javascript
-export const api = {
-  // ... 已有方法 ...
-  getClassrooms: () => request('GET', '/api/v1/classrooms'),
-  createClassroom: (body) => request('POST', '/api/v1/classrooms', body),
-}
-```
-
-`request` 函数已自动携带认证 Header，无需在页面组件里重复处理。
-
-### 修改后热更新
-
-前端文件修改后 Vite 自动热更新，**无需重启容器**，刷新浏览器即可看到效果。
-
-### 生产镜像构建
-
-`frontend/Dockerfile` 使用多阶段构建：node 编译 → nginx 服务。
+**常用命令：**
 
 ```bash
-# 本地验证生产镜像是否正常
-docker build -t schedule-frontend:local ./frontend
-docker run -p 8080:80 schedule-frontend:local
-# 访问 http://localhost:8080（需后端同时运行）
+make test            # unit + solver（快，无 Docker，提 PR 前过一遍）
+make test-all        # 四层全跑（合主干前过）
+make test-stack-up   # 单独起测试栈
+make test-stack-down # 关测试栈
 ```
 
-nginx 通过 `frontend/nginx.conf` 配置：`/api/` 请求代理至 `schedule-api:8000`，其余路径走 SPA fallback。
+---
+
+## 11. Git / 分支 / 提交约定
+
+**分支命名**：`<type>/issue-<num>-<short-desc>`
+
+```
+feature/issue-3-classroom-crud
+fix/issue-12-status-mapping
+test/issue-16-preference-coverage
+```
+
+| type | 用途 |
+|------|------|
+| `feature` | 新功能 |
+| `fix` | bug 修复 |
+| `test` | 加/改测试 |
+| `refactor` | 重构（不改行为） |
+| `docs` | 仅文档 |
+| `chore` | 杂项 |
+
+**提交信息**：Conventional Commits（英文），关联 issue。
+
+```
+feat(classroom): add CRUD endpoints
+
+Closes #3
+```
 
 ---
 
-## 八、数据库建表
+## 12. PR 流程
 
-项目使用 `Base.metadata.create_all` 在 API 启动时自动建表，无需手动迁移命令。
-
-- 新增 Model → 在 `app/models/__init__.py` 加 import → 重启 API 容器，新表自动创建
-- 已有表不会被删除或修改（`create_all` 只创建不存在的表）
-- 如果需要修改已有字段，直接 `docker compose down -v` 清空数据后重建
+1. 从 main 拉分支 → 提交 → push → 开 PR（标题 `<type>(#issue): ...`）
+2. PR 描述至少包含：**改动内容** + **测试方法** + `Closes #N`
+3. 本地 make test 通过
+4. CI 自动跑 `unit + solver`；`integration + e2e` 在合主干前跑一次
+5. 任意一名组员 approve 即可合，使用 **Squash and Merge**
 
 ---
 
-## 八、常见问题
+## 13. FAQ
 
-**Q: 修改代码后 Docker 内的 API 没有更新？**  
-A: `make up` 已挂载本地目录，Uvicorn `--reload` 模式会自动重启。如果不生效，`docker compose restart schedule-api`。
+**Q: 代码改了 API 没更新？**
+A: `make up` 已挂载本地目录，Uvicorn 自动 reload。不生效时 `docker compose restart schedule-api`。
 
-**Q: Celery Worker 没有执行任务？**  
-A: 检查 Redis 连接：`make logs-worker | grep "ready"`。
+**Q: Celery worker 不执行任务？**
+A: `make logs-worker | grep ready` 看是否连上 Redis。
 
-**Q: 数据库表不存在？**  
-A: `docker compose restart schedule-api`（启动时 `init_db()` 自动建表）。如果表结构有改动需要重置，用 `make reset && make build`。
+**Q: DB 表不存在？**
+A: `docker compose restart schedule-api` —— 启动时 `init_db()` 自动建表。改了字段结构要 `make reset && make build`。
 
-**Q: 测试报 `no event loop`？**  
-A: 确认 `pytest.ini` 中有 `asyncio_mode = auto`，且 `pytest-asyncio` 已安装。
+**Q: 测试报 `no event loop`？**
+A: `pytest.ini` 已配 `asyncio_mode = auto`，并 `pytest-asyncio` 在 `requirements-test.txt`。重装依赖：`pip install -r requirements-test.txt`。
 
-**Q: 前端页面空白或 `/api` 请求 404？**  
-A: 确认后端容器已启动（`docker compose ps`）。Vite proxy 把 `/api` 转发到 `schedule-api:8000`，后端不起则所有接口报错。
+**Q: 前端页面空白 / `/api` 404？**
+A: 确认后端已起：`docker compose ps`。前端 vite proxy `/api` → `schedule-api:8000`，后端没起则全部接口报错。
 
-**Q: 前端修改后没有更新？**  
-A: Vite 热更新有时需要手动刷新浏览器。如果还是不生效，检查 `make logs-worker`（查 schedule-frontend）是否有编译错误。
+**Q: 上游基础信息服务不可用，本地怎么开发？**
+A: `_fetch_upstream_data` 应有 fallback stub（B1 issue 实现）；当前阶段算法链路本身就在 scaffold，看 task_assignments 里 B1 卡。
+
+---
+
+> 如发现文档与代码不一致，**以代码为准**，并提 PR 修文档。
