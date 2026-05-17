@@ -1,4 +1,4 @@
-.PHONY: help up build down reset logs logs-api logs-worker test smoke db health push
+.PHONY: help up build down reset logs logs-api logs-worker test test-unit test-integration test-solver test-e2e test-smoke test-all test-stack-up test-stack-down db health push
 
 VERSION ?= latest
 
@@ -37,21 +37,37 @@ logs-worker: ## 查看 Celery Worker 日志
 
 # ── 测试 ──────────────────────────────────────────────────────────────────
 
-test: ## 运行单元测试（无需启动 Docker）
-	pytest tests/ -v
+test: ## 本地快速测试：unit + solver（无需 Docker）
+	pytest -m "unit or solver" -v
 
-smoke: ## 运行集成冒烟测试（需先 make up）
-	bash tests/smoke_test.sh
+test-unit: ## 只跑 unit 层（SQLite in-memory，无 Docker 依赖）
+	pytest -m unit -v
+
+test-solver: ## 只跑 solver 层（纯 Python，无 Docker 依赖）
+	pytest -m solver -v
+
+test-integration: test-stack-up ## 集成层（依赖 docker-compose.test.yml）
+	pytest -m integration -v ; rc=$$? ; $(MAKE) test-stack-down ; exit $$rc
+
+test-e2e: test-stack-up ## E2E 层
+	pytest -m e2e -v ; rc=$$? ; $(MAKE) test-stack-down ; exit $$rc
+
+test-smoke: test-stack-up ## E2E层的smoke-test子集
+	pytest -m smoke -v ; rc=$$? ; $(MAKE) test-stack-down ; exit $$rc
+
+test-all: test-stack-up ## 跑全四层（unit + solver + integration + e2e）
+	pytest -v ; rc=$$? ; $(MAKE) test-stack-down ; exit $$rc
+
+test-stack-up: ## 启动测试栈（隔离的 MySQL/Redis/API/Worker）
+	docker compose -f docker-compose.test.yml up -d --wait
+
+test-stack-down: ## 停止测试栈并清除数据卷
+	docker compose -f docker-compose.test.yml down -v
 
 # ── 数据库 ────────────────────────────────────────────────────────────────
 
 db: ## 进入 MySQL 交互命令行
 	docker compose exec mysql mysql -uroot -prootpassword course_arrange
-
-# ── 验证 ──────────────────────────────────────────────────────────────────
-
-health: ## 检查 API 健康状态
-	@curl -s http://localhost:8002/health | python3 -m json.tool
 
 # ── 镜像发布 ──────────────────────────────────────────────────────────────
 

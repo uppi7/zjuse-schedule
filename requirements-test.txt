@@ -1,0 +1,7 @@
+# 测试专用依赖
+# 用法：pip install -r requirements.txt -r requirements-test.txt
+
+-r requirements.txt
+
+pytest-cov==5.0.0           # 覆盖率
+pytest-celery==1.0.0        # Celery 测试支持（integration 层用）

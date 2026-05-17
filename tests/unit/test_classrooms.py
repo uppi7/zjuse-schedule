@@ -1,18 +1,19 @@
 """
-tests/test_classrooms.py
-教室接口测试
+tests/unit/test_classrooms.py
+教室接口单元测试（ASGITransport + SQLite in-memory，无外部依赖）
 """
 
 import pytest
 from httpx import AsyncClient
 
+pytestmark = pytest.mark.unit
 
 async def test_create_classroom(client: AsyncClient):
     resp = await client.post("/api/v1/classrooms", json={
-        "code": "A101",
-        "name": "A座101",
-        "campus": "西校区",
-        "building": "A座",
+        "code": "101",
+        "name": "琴房一",
+        "campus": "紫金港",
+        "building": "西教",
         "capacity": 120,
         "room_type": "LECTURE",
         "available_time": [{"day": 1, "slot": 1}, {"day": 1, "slot": 2}],
@@ -24,10 +25,10 @@ async def test_create_classroom(client: AsyncClient):
 
 async def test_create_classroom_duplicate_code(client: AsyncClient):
     payload = {
-        "code": "B202",
-        "name": "B202",
-        "campus": "东校区",
-        "building": "B座",
+        "code": "202",
+        "name": "202",
+        "campus": "玉泉",
+        "building": "教四",
         "capacity": 80,
         "room_type": "LECTURE",
         "available_time": [],
@@ -45,8 +46,8 @@ async def test_list_classrooms(client: AsyncClient):
 
 async def test_create_classroom_forbidden_for_student(student_client: AsyncClient):
     resp = await student_client.post("/api/v1/classrooms", json={
-        "code": "C303",
-        "name": "C303",
+        "code": "303",
+        "name": "303",
         "campus": "玉泉",
         "building": "教七",
         "capacity": 60,

@@ -1,0 +1,62 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main, master, dev]
+
+jobs:
+  unit-and-solver:
+    name: unit + solver (fast, no stack)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-test.txt
+
+      - name: Run unit + solver tests with coverage
+        run: pytest -m "unit or solver" -v --cov=app --cov-report=xml --cov-report=term
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit-solver
+          path: coverage.xml
+
+  integration-and-e2e:
+    name: integration + e2e (needs test stack)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test dependencies
+        run: pip install -r requirements-test.txt
+
+      - name: Start test stack
+        run: docker compose -f docker-compose.test.yml up -d --wait
+
+      - name: Run integration + e2e tests
+        env:
+          INTEGRATION_BASE_URL: http://localhost:8003
+          E2E_BASE_URL: http://localhost:8003
+        run: pytest -m "integration or e2e" -v
+
+      - name: Dump test stack logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs
+
+      - name: Tear down test stack
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
