@@ -3,9 +3,11 @@ app/services/schedule_service.py
 排课业务逻辑：触发任务、查询状态、手动调课、交付下游。
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from uuid import uuid4
+
 from celery.result import AsyncResult
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.schedule import ScheduleTask, ScheduleEntry, ScheduleStatus
 from app.schemas.schedule import (
@@ -41,12 +43,9 @@ async def trigger_auto_schedule(
             "A schedule task for this semester is already running",
         )
 
-    # 推送到 Celery（不阻塞）
-    celery_task = scheduler_tasks.run_auto_schedule.delay(req.semester, triggered_by)
-
-    # 记录到 DB
+    celery_task_id = str(uuid4())
     task_record = ScheduleTask(
-        celery_task_id=celery_task.id,
+        celery_task_id=celery_task_id,
         semester=req.semester,
         status=ScheduleStatus.PENDING,
         triggered_by=triggered_by,
@@ -54,7 +53,18 @@ async def trigger_auto_schedule(
     db.add(task_record)
     await db.commit()
 
-    return celery_task.id, req.semester
+    try:
+        scheduler_tasks.run_auto_schedule.apply_async(
+            args=(req.semester, triggered_by),
+            task_id=celery_task_id,
+        )
+    except Exception as exc:
+        task_record.status = ScheduleStatus.FAILED
+        task_record.error_msg = str(exc)
+        await db.commit()
+        raise
+
+    return celery_task_id, req.semester
 
 
 def get_schedule_status(task_id: str) -> ScheduleStatusResponse:

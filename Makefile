@@ -47,7 +47,7 @@ test-solver: ## 只跑 solver 层（纯 Python，无 Docker 依赖）
 	pytest -m solver -v
 
 test-integration: test-stack-up ## 集成层（依赖 docker-compose.test.yml）
-	pytest -m integration -v ; rc=$$? ; $(MAKE) test-stack-down ; exit $$rc
+	docker compose -f docker-compose.test.yml exec -T -e INTEGRATION_BASE_URL=http://localhost:8000 schedule-api-test pytest -m integration -v ; rc=$$? ; $(MAKE) test-stack-down ; exit $$rc
 
 test-e2e: test-stack-up ## E2E 层
 	pytest -m e2e -v ; rc=$$? ; $(MAKE) test-stack-down ; exit $$rc
@@ -59,7 +59,7 @@ test-all: test-stack-up ## 跑全四层（unit + solver + integration + e2e）
 	pytest -v ; rc=$$? ; $(MAKE) test-stack-down ; exit $$rc
 
 test-stack-up: ## 启动测试栈（隔离的 MySQL/Redis/API/Worker）
-	docker compose -f docker-compose.test.yml up -d --wait
+	docker compose -f docker-compose.test.yml up --build -d --wait
 
 test-stack-down: ## 停止测试栈并清除数据卷
 	docker compose -f docker-compose.test.yml down -v
