@@ -9,7 +9,8 @@ from celery.result import AsyncResult
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.schedule import ScheduleTask, ScheduleEntry, ScheduleStatus
+from app.core.security import CurrentUser
+from app.models.schedule import ScheduleTask, ScheduleEntry, ScheduleStatus, WeekParity
 from app.schemas.schedule import (
     AutoScheduleRequest,
     ManualAdjustRequest,
@@ -153,6 +154,7 @@ async def get_teacher_timetable(
     db: AsyncSession,
     teacher_id: str,
     semester: str,
+    current_user: CurrentUser,
     week: int | None = None,
 ) -> list[ScheduleEntry]:
     """
@@ -162,10 +164,54 @@ async def get_teacher_timetable(
       - entry.week_start <= week <= entry.week_end
       - 且 entry.week_parity 满足：ALL=任意 / ODD=week 为奇数 / EVEN=week 为偶数
     """
-    # TODO: 实现按 teacher_id + semester + 可选 week 的查询。
-    # 可复用 get_schedule_entries(db, semester, teacher_id=teacher_id) 的过滤逻辑，
-    # 再在 Python 侧按 week 与 week_parity 过滤
-    raise NotImplementedError("get_teacher_timetable: pending implementation")
+    _assert_can_view_teacher_timetable(current_user, teacher_id)
+
+    stmt = (
+        select(ScheduleEntry)
+        .where(ScheduleEntry.semester == semester)
+        .order_by(ScheduleEntry.id.asc())
+    )
+    if week is not None:
+        stmt = stmt.where(
+            ScheduleEntry.week_start <= week,
+            ScheduleEntry.week_end >= week,
+        )
+
+    result = await db.execute(stmt)
+    entries = [
+        entry
+        for entry in result.scalars().all()
+        if teacher_id in (entry.teacher_ids or [])
+    ]
+    if week is None:
+        return entries
+
+    return [entry for entry in entries if _entry_active_in_week(entry, week)]
+
+
+def _assert_can_view_teacher_timetable(current_user: CurrentUser, teacher_id: str) -> None:
+    if current_user.is_admin():
+        return
+    if current_user.is_teacher() and current_user.user_id == teacher_id:
+        return
+    raise BizException(
+        BizCode.PERMISSION_DENIED,
+        "Cannot access this teacher's timetable",
+    )
+
+
+def _entry_active_in_week(entry: ScheduleEntry, week: int) -> bool:
+    if not (entry.week_start <= week <= entry.week_end):
+        return False
+
+    parity = entry.week_parity
+    if parity == WeekParity.ALL:
+        return True
+    if parity == WeekParity.ODD:
+        return week % 2 == 1
+    if parity == WeekParity.EVEN:
+        return week % 2 == 0
+    return False
 
 
 async def notify_downstream(semester: str, entries: list[ScheduleEntry]) -> None:

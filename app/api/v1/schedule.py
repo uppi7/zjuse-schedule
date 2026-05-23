@@ -112,14 +112,14 @@ async def get_teacher_timetable(
     semester: str = Query(..., description="学期，如 2024-2025-1"),
     week: int | None = Query(default=None, ge=1, le=16, description="教学周，1-16；不传返回整学期"),
     db: AsyncSession = Depends(get_db),
-    _user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """
     查询单个教师在指定学期的课表条目，可按教学周切片。
     week 不传则返回整学期所有条目。
     """
     entries = await schedule_service.get_teacher_timetable(
-        db, teacher_id, semester, week=week
+        db, teacher_id, semester, user, week=week
     )
     return ApiResponse.ok(
         data=TeacherTimetableOut(
