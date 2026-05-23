@@ -4,6 +4,7 @@ app/schemas/classroom.py
 """
 
 from pydantic import BaseModel, Field
+
 from app.models.classroom import ClassroomType
 
 
@@ -26,6 +27,7 @@ class ClassroomCreate(BaseModel):
 class ClassroomUpdate(BaseModel):
     name: str | None = None
     campus: str | None = Field(default=None, max_length=32)
+    building: str | None = Field(default=None, max_length=64)
     capacity: int | None = Field(default=None, gt=0)
     room_type: ClassroomType | None = None
     available_time: list[ClassroomSlot] | None = None
@@ -44,3 +46,14 @@ class ClassroomOut(BaseModel):
     is_active: bool
 
     model_config = {"from_attributes": True}
+
+
+class ClassroomImportFailure(BaseModel):
+    row: int
+    code: str | None = None
+    error: str
+
+
+class ClassroomBatchImportResult(BaseModel):
+    success: int
+    failed: list[ClassroomImportFailure] = Field(default_factory=list)

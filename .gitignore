@@ -6,3 +6,6 @@ __pycache__/
 .mypy_cache/
 dist/
 *.egg-info/
+.codex/
+issue/
+.agents/

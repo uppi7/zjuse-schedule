@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     # 子系统间默认互信，不走 Bearer/OAuth；通过 X-User-Id / X-User-Role 透传调用者身份。
     INFO_SERVICE_BASE_URL: str = "http://info-service:8000"
     INFO_SERVICE_COURSES_PATH: str = "/api/v1/courses"
+    ALLOW_UPSTREAM_STUB_FALLBACK: bool = False
 
     # ── 认证 Header 字段名（网关透传）────────────────────────────────────────
     # 网关在转发请求时将已认证的用户信息写入以下 Header

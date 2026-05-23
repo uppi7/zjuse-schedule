@@ -7,6 +7,8 @@ Owner: tester
 """
 
 import asyncio
+import uuid
+
 import pytest
 from httpx import AsyncClient
 
@@ -20,32 +22,65 @@ async def test_health_endpoint_reachable(integration_client: AsyncClient):
     assert resp.json().get("status") == "ok"
 
 
-@pytest.mark.skip(reason="TODO(tester): 实现完整链路用例")
 async def test_trigger_auto_schedule_returns_task_id(integration_client: AsyncClient):
-    """
-    TODO(tester):
-    需求：POST /api/v1/schedule/auto-schedule 应当返回 202 + task_id。
+    semester = f"it-{uuid.uuid4().hex[:8]}"
 
-    预期成果：
-      - resp.status_code == 202
-      - resp.json()["data"]["task_id"] 非空
-      - 用该 task_id 调 GET /schedule-status/{task_id} 能拿到状态
-    """
-    raise NotImplementedError
+    resp = await integration_client.post(
+        "/api/v1/schedule/auto-schedule",
+        json={"semester": semester},
+    )
+
+    assert resp.status_code == 202, resp.text
+    body = resp.json()
+    assert body["code"] == 0
+    task_id = body["data"]["task_id"]
+    assert task_id
+
+    status_resp = await integration_client.get(
+        f"/api/v1/schedule/schedule-status/{task_id}"
+    )
+    assert status_resp.status_code == 200
+    assert status_resp.json()["data"]["task_id"] == task_id
 
 
-@pytest.mark.skip(reason="TODO(tester): 实现完整链路用例")
 async def test_schedule_task_eventually_succeeds(integration_client: AsyncClient):
-    """
-    TODO(tester):
-    需求：触发排课后 Celery worker 应在 ~15s 内完成，status 变为 SUCCESS。
+    semester = f"it-{uuid.uuid4().hex[:8]}"
+    await _create_schedulable_classroom(integration_client)
 
-    预期成果：
-      - 轮询 schedule-status 最终 status == "SUCCESS"
-      - result_summary 含 semester / total_courses / scheduled
-      - schedule_entries 表里有对应 task_id 的记录
-    """
-    raise NotImplementedError
+    trigger = await integration_client.post(
+        "/api/v1/schedule/auto-schedule",
+        json={"semester": semester},
+    )
+    assert trigger.status_code == 202, trigger.text
+    task_id = trigger.json()["data"]["task_id"]
+
+    result_summary = None
+    final_status = None
+    for _ in range(20):
+        await asyncio.sleep(1)
+        resp = await integration_client.get(
+            f"/api/v1/schedule/schedule-status/{task_id}"
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        if data["status"] in ("SUCCESS", "FAILED"):
+            final_status = data["status"]
+            result_summary = data["result_summary"]
+            break
+
+    assert final_status == "SUCCESS", result_summary
+    assert result_summary["semester"] == semester
+    assert result_summary["total_courses"] >= 1
+    assert result_summary["scheduled"] >= 1
+
+    entries = await integration_client.get(
+        "/api/v1/schedule/entries",
+        params={"semester": semester},
+    )
+    assert entries.status_code == 200
+    body = entries.json()
+    assert body["code"] == 0
+    assert len(body["data"]) >= 1
 
 
 @pytest.mark.skip(reason="TODO(tester): 跨服务边界用例")
@@ -57,3 +92,25 @@ async def test_classroom_persists_across_requests(integration_client: AsyncClien
     预期成果：建一个教室 → 关闭 client → 新 client 仍能查到该教室。
     """
     raise NotImplementedError
+
+
+async def _create_schedulable_classroom(integration_client: AsyncClient) -> None:
+    code = f"B1-{uuid.uuid4().hex[:8]}"
+    resp = await integration_client.post(
+        "/api/v1/classrooms",
+        json={
+            "code": code,
+            "name": "B1 集成测试教室",
+            "campus": "玉泉",
+            "building": "测试楼",
+            "capacity": 80,
+            "room_type": "LECTURE",
+            "available_time": [
+                {"day": day, "slot": slot}
+                for day in range(1, 6)
+                for slot in range(1, 13)
+            ],
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["code"] == 0

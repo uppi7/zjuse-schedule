@@ -11,13 +11,77 @@ list_for_algorithm 是给 scheduler_tasks._fetch_upstream_data 调用的，
 让算法层不依赖 SQLAlchemy。
 """
 
+from typing import Any
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.algorithm import engine
 from app.models.teacher_preference import TeacherPreference
+from app.schemas.response import BizCode, BizException
 from app.schemas.teacher_preference import (
     TeacherPreferenceCreate, TeacherPreferenceUpdate,
 )
+
+
+_PREFERENCE_FIELDS = (
+    "semester",
+    "course_id",
+    "campus",
+    "building",
+    "classroom_code",
+    "room_type",
+    "day_of_week",
+    "slot_start",
+    "slot_end",
+    "week_start",
+    "week_end",
+    "week_parity",
+    "is_negative",
+)
+
+
+def _normalize_for_compare(value: Any) -> Any:
+    return value.value if hasattr(value, "value") else value
+
+
+def _preference_values(obj: TeacherPreference | TeacherPreferenceCreate) -> dict[str, Any]:
+    if isinstance(obj, TeacherPreference):
+        return {
+            field: _normalize_for_compare(getattr(obj, field))
+            for field in _PREFERENCE_FIELDS
+        }
+    return {
+        field: _normalize_for_compare(getattr(obj, field))
+        for field in _PREFERENCE_FIELDS
+    }
+
+
+async def _ensure_not_duplicate(
+    db: AsyncSession,
+    teacher_id: str,
+    values: dict[str, Any],
+    exclude_pref_id: int | None = None,
+) -> None:
+    stmt = select(TeacherPreference).where(TeacherPreference.teacher_id == teacher_id)
+    if exclude_pref_id is not None:
+        stmt = stmt.where(TeacherPreference.id != exclude_pref_id)
+
+    rows = (await db.execute(stmt)).scalars().all()
+    for row in rows:
+        if _preference_values(row) == values:
+            raise BizException(
+                BizCode.GENERAL_ERROR,
+                "Duplicate teacher preference",
+            )
+
+
+def _assert_owner(pref: TeacherPreference, teacher_id: str) -> None:
+    if pref.teacher_id != teacher_id:
+        raise BizException(
+            BizCode.PERMISSION_DENIED,
+            "Cannot access another teacher's preference",
+        )
 
 
 async def create_preference(
@@ -39,7 +103,14 @@ async def create_preference(
       obj = TeacherPreference(teacher_id=teacher_id, **data.model_dump())
       db.add(obj); await db.commit(); await db.refresh(obj); return obj
     """
-    raise NotImplementedError("TODO: 实现 create_preference")
+    values = _preference_values(data)
+    await _ensure_not_duplicate(db, teacher_id, values)
+
+    obj = TeacherPreference(teacher_id=teacher_id, **data.model_dump())
+    db.add(obj)
+    await db.commit()
+    await db.refresh(obj)
+    return obj
 
 
 async def get_preference(
@@ -60,7 +131,14 @@ async def get_preference(
       404 BizCode.GENERAL_ERROR  — 行不存在
       403 BizCode.PERMISSION_DENIED — 行存在但不属于该 teacher
     """
-    raise NotImplementedError("TODO: 实现 get_preference")
+    obj = await db.get(TeacherPreference, pref_id)
+    if not obj:
+        raise BizException(
+            BizCode.GENERAL_ERROR,
+            f"Teacher preference {pref_id} not found",
+        )
+    _assert_owner(obj, teacher_id)
+    return obj
 
 
 async def list_preferences(
@@ -85,7 +163,12 @@ async def list_preferences(
       if semester: stmt = stmt.where(TP.semester == semester)
       stmt = stmt.offset(skip).limit(limit)
     """
-    raise NotImplementedError("TODO: 实现 list_preferences")
+    stmt = select(TeacherPreference).where(TeacherPreference.teacher_id == teacher_id)
+    if semester:
+        stmt = stmt.where(TeacherPreference.semester == semester)
+    stmt = stmt.order_by(TeacherPreference.id.asc()).offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
 
 
 async def update_preference(
@@ -108,7 +191,28 @@ async def update_preference(
 
       注：使用 exclude_unset（不是 exclude_none），允许将字段显式置为 None。
     """
-    raise NotImplementedError("TODO: 实现 update_preference")
+    obj = await get_preference(db, pref_id, teacher_id)
+    updates = data.model_dump(exclude_unset=True)
+    if not updates:
+        return obj
+
+    proposed_values = _preference_values(obj)
+    proposed_values.update(
+        {field: _normalize_for_compare(value) for field, value in updates.items()}
+    )
+    await _ensure_not_duplicate(
+        db,
+        teacher_id,
+        proposed_values,
+        exclude_pref_id=obj.id,
+    )
+
+    for field, value in updates.items():
+        setattr(obj, field, value)
+
+    await db.commit()
+    await db.refresh(obj)
+    return obj
 
 
 async def delete_preference(
@@ -123,7 +227,9 @@ async def delete_preference(
       obj = await get_preference(db, pref_id, teacher_id)
       await db.delete(obj); await db.commit()
     """
-    raise NotImplementedError("TODO: 实现 delete_preference")
+    obj = await get_preference(db, pref_id, teacher_id)
+    await db.delete(obj)
+    await db.commit()
 
 
 async def list_for_algorithm(
@@ -166,4 +272,30 @@ async def list_for_algorithm(
 
     规模注意：当前不分页、不缓存；数据量大时再优化（如流式或分批）。
     """
-    raise NotImplementedError("TODO: 实现 list_for_algorithm")
+    rows = (
+        await db.execute(
+            select(TeacherPreference)
+            .where(TeacherPreference.semester == semester)
+            .order_by(TeacherPreference.id.asc())
+        )
+    ).scalars().all()
+
+    return [
+        engine.TeacherPreference(
+            teacher_id=r.teacher_id,
+            semester=r.semester,
+            course_id=r.course_id,
+            campus=r.campus,
+            building=r.building,
+            classroom_code=r.classroom_code,
+            room_type=r.room_type.value if r.room_type else None,
+            day_of_week=int(r.day_of_week.value) if r.day_of_week else None,
+            slot_start=r.slot_start,
+            slot_end=r.slot_end,
+            week_start=r.week_start,
+            week_end=r.week_end,
+            week_parity=r.week_parity.value if r.week_parity else None,
+            is_negative=r.is_negative,
+        )
+        for r in rows
+    ]

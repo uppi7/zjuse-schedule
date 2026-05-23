@@ -30,6 +30,7 @@
 | status | ENUM | PENDING / RUNNING / SUCCESS / FAILED / PARTIAL |
 | triggered_by | VARCHAR(32) | 触发人 user_id |
 | error_msg | TEXT | 失败时的错误信息 |
+| result_meta | JSON | 任务结果摘要；如 `{"unscheduled":["C017"],"unscheduled_count":1}` |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
 

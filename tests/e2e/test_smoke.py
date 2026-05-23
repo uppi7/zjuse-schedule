@@ -63,7 +63,8 @@ async def test_student_forbidden_to_create_classroom(student_client: AsyncClient
         "room_type": "LECTURE",
         "available_time": [],
     })
-    assert resp.status_code == 403
+    assert resp.status_code == 200
+    assert resp.json()["code"] == 2012
 
 
 # ── 【5+6】触发排课并轮询进度（合并为一个测试，保留 shell 中的顺序依赖语义） ──

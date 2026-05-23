@@ -46,6 +46,7 @@ class ScheduleTask(Base):
     )
     triggered_by: Mapped[str] = mapped_column(String(32), nullable=False, comment="触发人 user_id")
     error_msg: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
