@@ -10,11 +10,11 @@ tests/factories.py
 """
 
 from app.algorithm.engine import (
-    CourseInput,
     ClassroomInput,
-    TeacherPreference,
+    CourseInput,
     RoomRequirement,
     RoomType,
+    TeacherPreference,
 )
 
 
@@ -54,6 +54,30 @@ def make_preference(**overrides) -> TeacherPreference:
     return TeacherPreference(**defaults)
 
 
+def make_pref_payload(**overrides) -> dict:
+    """构造一个 HTTP 表单/JSON payload，符合 TeacherPreferenceCreate 的字段。
+
+    便于 e2e 测试直接 POST 到 /api/v1/teacher-preferences。
+    """
+    defaults = dict(
+        semester="2024-2025-1",
+        course_id=None,
+        campus="玉泉",
+        building="教三",
+        classroom_code=None,
+        room_type="LECTURE",
+        day_of_week=1,
+        slot_start=1,
+        slot_end=2,
+        week_start=1,
+        week_end=16,
+        week_parity="ALL",
+        is_negative=False,
+    )
+    defaults.update(overrides)
+    return defaults
+
+
 def make_minimal_solver_input() -> tuple[
     list[CourseInput], list[ClassroomInput], list[TeacherPreference]
 ]:
@@ -63,11 +87,15 @@ def make_minimal_solver_input() -> tuple[
         make_course(course_id="C001", teacher_ids=["T001"], student_count=30),
         make_course(course_id="C002", teacher_ids=["T002"], student_count=50),
         make_course(
-            course_id="C003", teacher_ids=["T003"], student_count=20,
+            course_id="C003",
+            teacher_ids=["T003"],
+            student_count=20,
             room_requirements=[RoomRequirement(RoomType.LAB_CHEMISTRY, 2)],
         ),
         make_course(
-            course_id="C004", teacher_ids=["T004"], student_count=40,
+            course_id="C004",
+            teacher_ids=["T004"],
+            student_count=40,
             room_requirements=[
                 RoomRequirement(RoomType.LECTURE, 2),
                 RoomRequirement(RoomType.LAB_CHEMISTRY, 2),

@@ -6,6 +6,7 @@ E2E 层 fixture：API 级端到端，httpx 打 docker-compose.test.yml 暴露的
 """
 
 import os
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
@@ -14,8 +15,9 @@ E2E_BASE_URL = os.getenv("E2E_BASE_URL", "http://localhost:8003")
 
 
 def _stack_ready() -> bool:
-    import urllib.request
     import urllib.error
+    import urllib.request
+
     try:
         with urllib.request.urlopen(f"{E2E_BASE_URL}/health", timeout=2) as r:
             return r.status == 200
@@ -51,5 +53,16 @@ async def student_client() -> AsyncClient:
         base_url=E2E_BASE_URL,
         headers={"X-User-Id": "e2e-student", "X-User-Role": "STUDENT"},
         timeout=30.0,
+    ) as ac:
+        yield ac
+
+
+@pytest_asyncio.fixture
+async def teacher_client() -> AsyncClient:
+    """TEACHER 角色 client，用于 e2e 教师流程测试。"""
+    async with AsyncClient(
+        base_url=E2E_BASE_URL,
+        headers={"X-User-Id": "STUB-T001", "X-User-Role": "TEACHER"},
+        timeout=60.0,
     ) as ac:
         yield ac

@@ -340,3 +340,79 @@ async def test_student_cannot_query_timetable(student_client: AsyncClient):
     )
 
     assert body["code"] == 2003
+
+
+async def test_golden_all_parity_expands_across_weeks(
+    db_session: AsyncSession,
+    teacher_client: AsyncClient,
+):
+    """Golden: 一个 ALL 条目应在任意请求周中出现（这里检验周 1 和周 2）。"""
+    semester = _semester()
+    task = await _seed_task(db_session, semester)
+    await _add_entry(
+        db_session,
+        task,
+        semester=semester,
+        course_id="G-ALL",
+        teacher_ids=["teacher-b3-001"],
+        week_start=1,
+        week_end=2,
+        week_parity=WeekParity.ALL,
+    )
+    await db_session.commit()
+
+    body_w1 = await _get_timetable(teacher_client, "teacher-b3-001", semester=semester, week=1)
+    body_w2 = await _get_timetable(teacher_client, "teacher-b3-001", semester=semester, week=2)
+
+    assert [e["course_id"] for e in body_w1["data"]["entries"]] == ["G-ALL"]
+    assert [e["course_id"] for e in body_w2["data"]["entries"]] == ["G-ALL"]
+
+
+async def test_golden_odd_parity_only_shows_on_odd_week(
+    db_session: AsyncSession,
+    teacher_client: AsyncClient,
+):
+    semester = _semester()
+    task = await _seed_task(db_session, semester)
+    await _add_entry(
+        db_session,
+        task,
+        semester=semester,
+        course_id="G-ODD",
+        teacher_ids=["teacher-b3-001"],
+        week_start=1,
+        week_end=3,
+        week_parity=WeekParity.ODD,
+    )
+    await db_session.commit()
+
+    odd_body = await _get_timetable(teacher_client, "teacher-b3-001", semester=semester, week=1)
+    even_body = await _get_timetable(teacher_client, "teacher-b3-001", semester=semester, week=2)
+
+    assert [e["course_id"] for e in odd_body["data"]["entries"]] == ["G-ODD"]
+    assert even_body["data"]["entries"] == []
+
+
+async def test_golden_even_parity_only_shows_on_even_week(
+    db_session: AsyncSession,
+    teacher_client: AsyncClient,
+):
+    semester = _semester()
+    task = await _seed_task(db_session, semester)
+    await _add_entry(
+        db_session,
+        task,
+        semester=semester,
+        course_id="G-EVEN",
+        teacher_ids=["teacher-b3-001"],
+        week_start=2,
+        week_end=4,
+        week_parity=WeekParity.EVEN,
+    )
+    await db_session.commit()
+
+    odd_body = await _get_timetable(teacher_client, "teacher-b3-001", semester=semester, week=3)
+    even_body = await _get_timetable(teacher_client, "teacher-b3-001", semester=semester, week=4)
+
+    assert odd_body["data"]["entries"] == []
+    assert [e["course_id"] for e in even_body["data"]["entries"]] == ["G-EVEN"]
