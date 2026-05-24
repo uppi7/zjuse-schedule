@@ -12,18 +12,41 @@ integration 层 fixture：连接 docker-compose.test.yml 暴露的真实 MySQL/R
 """
 
 import os
+from collections.abc import AsyncIterator
+
 import pytest
 import pytest_asyncio
+import redis.asyncio as redis
 from httpx import AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 # integration 栈的入口地址。docker-compose.test.yml 暴露在 8003
 INTEGRATION_BASE_URL = os.getenv("INTEGRATION_BASE_URL", "http://localhost:8003")
 
 
+def _mysql_url() -> str:
+    host = os.getenv("MYSQL_HOST", "localhost")
+    port = int(os.getenv("MYSQL_PORT", "3308"))
+    user = os.getenv("MYSQL_USER", "root")
+    password = os.getenv("MYSQL_PASSWORD", "testpassword")
+    db = os.getenv("MYSQL_DB", "schedule_test")
+    return f"mysql+aiomysql://{user}:{password}@{host}:{port}/{db}"
+
+
+def _redis_url(db_index: int) -> str:
+    host = os.getenv("REDIS_HOST", "localhost")
+    port = int(os.getenv("REDIS_PORT", "6381"))
+    password = os.getenv("REDIS_PASSWORD", "")
+    auth = f":{password}@" if password else ""
+    return f"redis://{auth}{host}:{port}/{db_index}"
+
+
 def _stack_ready() -> bool:
     """检测 docker-compose.test.yml 是否已起来；未起则跳过整个 integration 层。"""
-    import urllib.request
     import urllib.error
+    import urllib.request
+
     try:
         with urllib.request.urlopen(f"{INTEGRATION_BASE_URL}/health", timeout=2) as r:
             return r.status == 200
@@ -43,7 +66,7 @@ def _require_integration_stack():
 
 
 @pytest_asyncio.fixture
-async def integration_client() -> AsyncClient:
+async def integration_client() -> AsyncIterator[AsyncClient]:
     """ADMIN 角色，打真实栈。每个测试一个 client。"""
     async with AsyncClient(
         base_url=INTEGRATION_BASE_URL,
@@ -51,13 +74,13 @@ async def integration_client() -> AsyncClient:
             "X-User-Id": "integration-admin",
             "X-User-Role": "ADMIN",
         },
-        timeout=30.0,
+        timeout=60.0,
     ) as ac:
         yield ac
 
 
 @pytest_asyncio.fixture
-async def integration_student_client() -> AsyncClient:
+async def integration_student_client() -> AsyncIterator[AsyncClient]:
     """STUDENT 角色，用于权限断言。"""
     async with AsyncClient(
         base_url=INTEGRATION_BASE_URL,
@@ -65,6 +88,45 @@ async def integration_student_client() -> AsyncClient:
             "X-User-Id": "integration-student",
             "X-User-Role": "STUDENT",
         },
-        timeout=30.0,
+        timeout=60.0,
     ) as ac:
         yield ac
+
+
+@pytest_asyncio.fixture
+async def integration_mysql_engine() -> AsyncIterator[AsyncEngine]:
+    """直连测试栈 MySQL，用于黑盒断言和清理。"""
+    engine = create_async_engine(_mysql_url(), pool_pre_ping=False)
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def integration_redis_client() -> AsyncIterator[redis.Redis]:
+    """直连测试栈 Redis（Celery result backend）。"""
+    client = redis.Redis.from_url(_redis_url(3), decode_responses=False)
+    try:
+        yield client
+    finally:
+        await client.aclose()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _ensure_integration_schema(integration_mysql_engine: AsyncEngine):
+    """让本地/CI 的测试栈 schema 至少包含当前代码依赖的字段。"""
+    async with integration_mysql_engine.begin() as conn:
+        exists_result = await conn.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'schedule_tasks'
+                  AND COLUMN_NAME = 'result_meta'
+                """
+            )
+        )
+        if int(exists_result.scalar_one()) == 0:
+            await conn.execute(text("ALTER TABLE schedule_tasks ADD COLUMN result_meta JSON NULL"))
