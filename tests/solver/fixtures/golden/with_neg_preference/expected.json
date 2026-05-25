@@ -1,0 +1,8 @@
+{
+  "scheduled_count": 1,
+  "unscheduled_ids": [],
+  "max_conflicts": 0,
+  "extra": {
+    "description": "is_negative=True 为软扣分，不能导致排课失败；课程应排在非周一时段（评分驱动），若仅剩周一也必须排上"
+  }
+}

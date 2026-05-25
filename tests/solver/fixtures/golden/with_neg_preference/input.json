@@ -1,0 +1,103 @@
+{
+  "courses": [
+    {
+      "course_id": "C001",
+      "teacher_ids": ["T001"],
+      "student_count": 30,
+      "room_requirements": [
+        {
+          "room_type": "LECTURE",
+          "hours": 2
+        }
+      ]
+    }
+  ],
+  "classrooms": [
+    {
+      "classroom_id": 1,
+      "campus": "玉泉",
+      "capacity": 60,
+      "room_type": "LECTURE",
+      "available_slots": [
+        [1, 1],
+        [1, 2],
+        [1, 3],
+        [1, 4],
+        [1, 5],
+        [1, 6],
+        [1, 7],
+        [1, 8],
+        [1, 9],
+        [1, 10],
+        [1, 11],
+        [1, 12],
+        [2, 1],
+        [2, 2],
+        [2, 3],
+        [2, 4],
+        [2, 5],
+        [2, 6],
+        [2, 7],
+        [2, 8],
+        [2, 9],
+        [2, 10],
+        [2, 11],
+        [2, 12],
+        [3, 1],
+        [3, 2],
+        [3, 3],
+        [3, 4],
+        [3, 5],
+        [3, 6],
+        [3, 7],
+        [3, 8],
+        [3, 9],
+        [3, 10],
+        [3, 11],
+        [3, 12],
+        [4, 1],
+        [4, 2],
+        [4, 3],
+        [4, 4],
+        [4, 5],
+        [4, 6],
+        [4, 7],
+        [4, 8],
+        [4, 9],
+        [4, 10],
+        [4, 11],
+        [4, 12],
+        [5, 1],
+        [5, 2],
+        [5, 3],
+        [5, 4],
+        [5, 5],
+        [5, 6],
+        [5, 7],
+        [5, 8],
+        [5, 9],
+        [5, 10],
+        [5, 11],
+        [5, 12]
+      ]
+    }
+  ],
+  "preferences": [
+    {
+      "teacher_id": "T001",
+      "semester": "2024-2025-1",
+      "course_id": null,
+      "campus": null,
+      "building": null,
+      "classroom_code": null,
+      "room_type": null,
+      "day_of_week": 1,
+      "slot_start": null,
+      "slot_end": null,
+      "week_start": null,
+      "week_end": null,
+      "week_parity": null,
+      "is_negative": true
+    }
+  ]
+}

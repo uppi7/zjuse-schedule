@@ -1,0 +1,50 @@
+{
+  "courses": [
+    {
+      "course_id": "C001",
+      "teacher_ids": ["T001"],
+      "student_count": 10,
+      "room_requirements": [
+        {
+          "room_type": "LECTURE",
+          "hours": 2
+        }
+      ]
+    },
+    {
+      "course_id": "C002",
+      "teacher_ids": ["T002"],
+      "student_count": 10,
+      "room_requirements": [
+        {
+          "room_type": "LECTURE",
+          "hours": 2
+        }
+      ]
+    },
+    {
+      "course_id": "C003",
+      "teacher_ids": ["T003"],
+      "student_count": 10,
+      "room_requirements": [
+        {
+          "room_type": "LECTURE",
+          "hours": 2
+        }
+      ]
+    }
+  ],
+  "classrooms": [
+    {
+      "classroom_id": 1,
+      "campus": "玉泉",
+      "capacity": 30,
+      "room_type": "LECTURE",
+      "available_slots": [
+        [1, 1],
+        [1, 2]
+      ]
+    }
+  ],
+  "preferences": []
+}

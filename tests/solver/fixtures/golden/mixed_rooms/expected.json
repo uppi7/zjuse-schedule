@@ -1,0 +1,8 @@
+{
+  "scheduled_count": 4,
+  "unscheduled_ids": [],
+  "max_conflicts": 0,
+  "extra": {
+    "description": "C001 混合课产生2条结果（LECTURE+LAB_CHEMISTRY各1次），C002 hours=4 拆成2次讲授课共2条；验证 room_requirements 多项合并与学时拆分逻辑"
+  }
+}
