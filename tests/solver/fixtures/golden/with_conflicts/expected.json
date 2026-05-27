@@ -1,0 +1,8 @@
+{
+  "scheduled_count": 1,
+  "unscheduled_ids": ["C002", "C003"],
+  "max_conflicts": 0,
+  "extra": {
+    "description": "教室仅周一1-2节可用，3门课竞争同一时段；算法按难度排序，优先排 C001（学生数最多/最难），剩余2门进 unscheduled；验证无冲突+unscheduled 正确"
+  }
+}

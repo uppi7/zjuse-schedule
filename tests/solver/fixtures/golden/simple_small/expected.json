@@ -1,0 +1,8 @@
+{
+  "scheduled_count": 3,
+  "unscheduled_ids": [],
+  "max_conflicts": 0,
+  "extra": {
+    "description": "3门课2教室，不同房型，全部可排；验证基础流程和值域合法性"
+  }
+}

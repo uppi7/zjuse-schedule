@@ -1,0 +1,8 @@
+{
+  "scheduled_count": 2,
+  "unscheduled_ids": [],
+  "max_conflicts": 0,
+  "extra": {
+    "description": "同教师 T001 跨两校区授课；软约束 S2 扣分驱动算法倾向将2门排在不同天，但不强制；两门均须排上且无硬冲突"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "scheduled_count": 0,
+  "unscheduled_ids": ["C001", "C002"],
+  "max_conflicts": 0,
+  "extra": {
+    "description": "C001 容量不足（H3）、C002 缺对应房型（H4），均进 unscheduled；验证算法在全不可解时返回空 results 而非抛异常"
+  }
+}

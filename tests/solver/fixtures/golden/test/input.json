@@ -1,0 +1,22 @@
+{
+  "courses": [
+    {
+      "course_id": "C001",
+      "teacher_ids": ["T001"],
+      "student_count": 30,
+      "room_requirements": [
+        {"room_type": "LECTURE", "hours": 2}
+      ]
+    }
+  ],
+  "classrooms": [
+    {
+      "classroom_id": 1,
+      "campus": "玉泉",
+      "capacity": 60,
+      "room_type": "LECTURE",
+      "available_slots": [[1, 1], [1, 2]]
+    }
+  ],
+  "preferences": []
+}
