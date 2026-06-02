@@ -75,7 +75,4 @@ push: ## 构建并推送镜像到 ghcr.io（用法：make push VERSION=v0.1.0）
 	docker build -t schedule-api:$(VERSION) .
 	docker tag schedule-api:$(VERSION) ghcr.io/uppi7/schedule-api:$(VERSION)
 	docker push ghcr.io/uppi7/schedule-api:$(VERSION)
-	docker build -t schedule-frontend:$(VERSION) ./frontend
-	docker tag schedule-frontend:$(VERSION) ghcr.io/uppi7/schedule-frontend:$(VERSION)
-	docker push ghcr.io/uppi7/schedule-frontend:$(VERSION)
-	@echo "✓ 已推送：schedule-api:$(VERSION)  schedule-frontend:$(VERSION)"
+	@echo "✓ 已推送：schedule-api:$(VERSION)"

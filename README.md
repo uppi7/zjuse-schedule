@@ -6,23 +6,23 @@
 
 根据教室、教师、课程数据，自动生成全学期课表，并支持人工微调。
 
-> 完整接口与 schema 见 http://localhost:8002/docs。
+> 完整接口与 schema 见 http://localhost:8002/docs
 
 ## 架构
 
 ```
-前端 ──→ [API Gateway] ──→ FastAPI (8002)
-                               │
-                ┌──────────────┴──────────────┐
-                ↓                             ↓
-        同步（教室/课表查询）         触发排课 → Celery Worker
-                ↓                             ↓
-              MySQL                    排课算法（CPU 密集）
-                                              ↓
-                                    结果写 MySQL，进度存 Redis
+API Gateway / 调用方 ──→ FastAPI (8002)
+                              │
+               ┌──────────────┴──────────────┐
+               ↓                             ↓
+       同步 API（教室/课表查询）      触发排课 → Celery Worker
+               ↓                             ↓
+             MySQL                    排课算法（CPU 密集）
+                                             ↓
+                                   结果写 MySQL，进度存 Redis
 ```
 
-**技术栈：** FastAPI · Celery · Redis · MySQL · SQLAlchemy asyncio · Pydantic v2 · httpx · Vue 3 · Vite · Docker
+**技术栈：** FastAPI · Celery · Redis · MySQL · SQLAlchemy asyncio · Pydantic v2 · httpx · Docker
 
 ---
 
@@ -36,8 +36,8 @@ make build       # 首次：构建镜像并启动所有容器
 ```
 
 启动后访问：
-- 前端页面：http://localhost:5173
 - API 文档：http://localhost:8002/docs
+- OpenAPI JSON：http://localhost:8002/openapi.json
 
 ```bash
 make up          # 日常启动
@@ -74,29 +74,6 @@ zjuse-schedule/
 │   └── tasks/
 │       ├── celery_app.py           # Celery 配置
 │       └── scheduler_tasks.py      # 异步排课任务（含上游拉取/落库占位）
-├── frontend/                       # 前端（Vue 3 + Vite + Element Plus + Pinia）
-│   ├── Dockerfile                  # 生产镜像：node 构建 → nginx 服务
-│   ├── nginx.conf                  # SPA 路由 + /api 反向代理
-│   ├── package.json
-│   ├── vite.config.js              # dev server :5173，/api 代理至后端
-│   ├── index.html
-│   └── src/
-│       ├── main.js
-│       ├── App.vue
-│       ├── style.css
-│       ├── api/
-│       │   ├── http.js             # axios 实例 + 拦截器（处理 ApiResponse）
-│       │   ├── modules/            # 按资源分模块的请求函数
-│       │   └── index.js            # barrel 再导出
-│       ├── router/index.js         # Vue Router 路由表
-│       ├── stores/auth.js          # Pinia store（当前用户）
-│       ├── layouts/                # 全局布局（侧边菜单 + 顶部 header）
-│       └── views/                  # 一页一目录，每个目录下 Index.vue
-│           ├── resources/          # 教室管理（占位）
-│           ├── preferences/        # 教师偏好（占位）
-│           ├── engine/             # 自动排课触发与进度（占位）
-│           ├── adjust/             # 手动调课（占位）
-│           └── timetable/          # 课表查询与打印（占位）
 ├── tests/
 │   ├── conftest.py                 # 根 fixture（client / student_client，SQLite in-memory）
 │   ├── factories.py                # 算法 dataclass 构造工厂
@@ -130,6 +107,5 @@ zjuse-schedule/
 
 | 文档 | 内容 |
 |---|---|
-| [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) | 工作流 + 技术约定 + ApiResponse / 异常 / 权限规范 |
 | [docs/DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | 数据库表结构与跨组 JSON 契约 |
 | http://localhost:8002/docs | 完整接口列表与请求/响应 schema |
