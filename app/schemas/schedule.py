@@ -47,7 +47,10 @@ class ManualAdjustRequest(BaseModel):
 class ScheduleEntryOut(BaseModel):
     id: int
     semester: str
+    offering_id: str
     course_id: str
+    course_code: str | None = None
+    course_name: str | None = None
     teacher_ids: list[str]
     classroom_id: int
     day_of_week: DayOfWeek

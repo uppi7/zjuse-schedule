@@ -89,6 +89,7 @@ async def get_schedule_entries(
     semester: str = Query(..., description="学期，如 2024-2025-1"),
     teacher_id: str | None = Query(default=None),
     course_id: str | None = Query(default=None),
+    offering_id: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     _user: CurrentUser = Depends(get_current_user),
 ):
@@ -97,7 +98,11 @@ async def get_schedule_entries(
     下游子系统（智能选课组）可通过此接口拉取课表数据。
     """
     entries = await schedule_service.get_schedule_entries(
-        db, semester, teacher_id=teacher_id, course_id=course_id
+        db,
+        semester,
+        teacher_id=teacher_id,
+        course_id=course_id,
+        offering_id=offering_id,
     )
     return ApiResponse.ok(data=[ScheduleEntryOut.model_validate(e) for e in entries])
 

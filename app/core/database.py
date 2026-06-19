@@ -3,6 +3,9 @@ app/core/database.py
 SQLAlchemy 异步引擎与 Session 工厂。
 """
 
+import asyncio
+
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
@@ -30,8 +33,21 @@ class Base(DeclarativeBase):
 async def init_db() -> None:
     """应用启动时自动建表（不存在则创建，已存在则跳过）。"""
     import app.models  # noqa: F401 — 确保所有 Model 已注册到 Base.metadata
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+
+    last_exc: Exception | None = None
+    for attempt in range(1, 31):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            return
+        except OperationalError as exc:
+            last_exc = exc
+            if attempt == 30:
+                break
+            await asyncio.sleep(2)
+
+    if last_exc:
+        raise last_exc
 
 
 async def get_db() -> AsyncSession:

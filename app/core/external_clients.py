@@ -1,73 +1,160 @@
 """
 app/core/external_clients.py
-跨微服务 HTTP 调用封装，基于 httpx.AsyncClient。
-所有对外部子系统的调用都集中在此文件，便于统一管理超时、Mock、契约调整。
-
-鉴权约定：
-   子系统间默认互信；
-   调用上游时透传当前用户身份：
-     X-User-Id   : 调用者 user_id（在排课任务里 = 触发排课的管理员 id）
-     X-User-Role : 调用者角色（ADMIN / TEACHER / STUDENT）
+Gateway-backed HTTP clients for upstream Auth and Info services.
 """
 
+from dataclasses import dataclass
 from typing import Any
+
 import httpx
+
+from app.algorithm.engine import RoomType
 from app.core.config import settings
 
 
-def _trust_headers(user_id: str, role: str) -> dict[str, str]:
-    """构造对上游服务的互信 Header（透传调用者身份）。"""
-    return {
-        settings.AUTH_HEADER_USER_ID: user_id,
-        settings.AUTH_HEADER_USER_ROLE: role,
-    }
+@dataclass(frozen=True)
+class OfferingSchedulePayload:
+    """Stable upstream DTO consumed by the scheduler worker."""
+
+    offering_id: str
+    course_id: str
+    course_code: str | None
+    course_name: str | None
+    teacher_ids: list[str]
+    student_count: int
+    room_requirements: list[dict[str, Any]]
 
 
 class InfoServiceClient:
-    """
-    封装对第一子系统（基础信息管理组）的 HTTP 调用。
+    """Access Info Service through Gateway using a Schedule service token."""
 
-      GET /api/v1/courses?semester={semester}    scope: course:read
-      GET /api/v1/courses/{course_id}            scope: course:read     （排课暂未使用）
-
-    响应包络（约定）：
-      {"code": 0, "msg": "success", "data": [...] | {...}}
-
-    课程列表每条记录字段（**算法必需，第一组返回这些字段**）：
-      course_id         : str    课程唯一标识
-      name              : str    课程名称
-      teacher_id        : str    主讲教师 ID（合上课暂按单教师处理）
-      semester          : str    学期标识，如 "2024-2025-1"
-      student_count     : int    选课人数
-      room_requirements : list   每周分房间类型的学时需求，每项：
-                                 {"room_type": "LECTURE"|"LAB_PHYSICS"|"LAB_CHEMISTRY"|
-                                                "LAB_BIOLOGY"|"COMPUTER_LAB"|"GYM"|...,
-                                  "hours": int}
-                                 取值权威定义见 ClassroomType；新增类型时两端同步
-    """
-
-    def __init__(self, user_id: str, role: str) -> None:
+    def __init__(self) -> None:
         self._client = httpx.AsyncClient(
-            base_url=settings.INFO_SERVICE_BASE_URL,
-            headers=_trust_headers(user_id, role),
+            base_url=settings.GATEWAY_BASE_URL.rstrip("/"),
             timeout=10.0,
         )
+        self._service_token: str | None = None
+
+    async def _get_service_token(self) -> str:
+        if self._service_token:
+            return self._service_token
+
+        resp = await self._client.post(
+            settings.AUTH_SYS_LOGIN_PATH,
+            json={
+                "client_id": settings.SCHEDULE_SERVICE_CLIENT_ID,
+                "client_secret": settings.SCHEDULE_SERVICE_CLIENT_SECRET,
+            },
+        )
+        resp.raise_for_status()
+        data = self._unwrap(resp.json())
+        token = data.get("access_token") or data.get("service_token") or data.get("token")
+        if not token:
+            raise ValueError("Auth service response did not include access_token")
+        self._service_token = str(token)
+        return self._service_token
+
+    async def _request(self, method: str, path: str, **kwargs) -> Any:
+        token = await self._get_service_token()
+        headers = kwargs.pop("headers", {})
+        headers["Authorization"] = f"Bearer {token}"
+        resp = await self._client.request(method, path, headers=headers, **kwargs)
+        resp.raise_for_status()
+        return self._unwrap(resp.json())
 
     @staticmethod
     def _unwrap(body: Any) -> Any:
-        """解开 {code,msg,data} 包络；兼容直接返回 list/dict 的情况。"""
-        return body["data"] if isinstance(body, dict) and "data" in body else body
+        if isinstance(body, dict) and "data" in body:
+            return body["data"]
+        return body
 
-    async def get_all_courses(self, semester: str) -> list[dict[str, Any]]:
-        """
-        拉取指定学期的全部课程基本信息。
-        返回元素结构见类 docstring。
-        """
-        resp = await self._client.get(
-            settings.INFO_SERVICE_COURSES_PATH, params={"semester": semester}
+    @staticmethod
+    def _items(payload: Any) -> list[dict[str, Any]]:
+        if isinstance(payload, dict) and "items" in payload:
+            return list(payload["items"])
+        if isinstance(payload, list):
+            return payload
+        raise ValueError(f"Expected list response payload, got {type(payload).__name__}")
+
+    async def list_offerings(self, term_code: str) -> list[dict[str, Any]]:
+        return await self._paginate(
+            settings.INFO_OFFERINGS_PATH,
+            {"term_code": term_code, "status": "ACTIVE"},
         )
-        resp.raise_for_status()
-        return self._unwrap(resp.json())
+
+    async def list_courses_by_ids(self, course_ids: set[str]) -> dict[str, dict[str, Any]]:
+        courses: dict[str, dict[str, Any]] = {}
+        for course_id in sorted(course_ids):
+            data = await self._request("GET", f"{settings.INFO_COURSES_PATH}{course_id}")
+            courses[str(data["id"])] = data
+        return courses
+
+    async def list_offering_teachers(self, offering_id: str) -> list[dict[str, Any]]:
+        path = settings.INFO_OFFERING_TEACHERS_PATH_TEMPLATE.format(
+            offering_id=offering_id,
+        )
+        return await self._paginate(path, {})
+
+    async def get_scheduling_inputs(self, term_code: str) -> list[OfferingSchedulePayload]:
+        offerings = await self.list_offerings(term_code)
+        course_ids = {str(item["course_id"]) for item in offerings}
+        course_map = await self.list_courses_by_ids(course_ids)
+
+        payloads: list[OfferingSchedulePayload] = []
+        for offering in offerings:
+            offering_id = str(offering["id"])
+            course_id = str(offering["course_id"])
+            course = course_map.get(course_id)
+            if not course:
+                raise ValueError(f"Course {course_id} for offering {offering_id} not found")
+
+            teachers = await self.list_offering_teachers(offering_id)
+            credit = course.get("credit")
+            room_requirements = [
+                {
+                    "room_type": RoomType.LECTURE.value,
+                    "hours": credit,
+                }
+            ]
+            payloads.append(
+                OfferingSchedulePayload(
+                    offering_id=offering_id,
+                    course_id=course_id,
+                    course_code=course.get("course_code"),
+                    course_name=course.get("course_name"),
+                    teacher_ids=[str(item["teacher_id"]) for item in teachers],
+                    student_count=int(offering.get("capacity") or 0),
+                    room_requirements=room_requirements,
+                )
+            )
+        return payloads
+
+    async def _paginate(self, path: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+        page = 1
+        page_size = 100
+        items: list[dict[str, Any]] = []
+
+        while True:
+            payload = await self._request(
+                "GET",
+                path,
+                params={**params, "page": page, "page_size": page_size},
+            )
+            batch = self._items(payload)
+            items.extend(batch)
+
+            pagination = payload.get("pagination") if isinstance(payload, dict) else None
+            if not pagination:
+                break
+
+            total = int(pagination.get("total") or len(items))
+            current_page = int(pagination.get("page") or page)
+            current_page_size = int(pagination.get("page_size") or page_size)
+            if len(items) >= total or len(batch) < current_page_size:
+                break
+            page = current_page + 1
+
+        return items
 
     async def aclose(self) -> None:
         await self._client.aclose()

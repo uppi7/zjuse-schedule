@@ -66,7 +66,10 @@ class ScheduleEntry(Base):
     semester: Mapped[str] = mapped_column(String(16), nullable=False)
 
     # 来自基础信息组（外键不在本库，用普通字段存 ID）
+    offering_id: Mapped[str] = mapped_column(String(32), nullable=False, comment="开课班 ID（来自第一组）")
     course_id: Mapped[str] = mapped_column(String(32), nullable=False, comment="课程 ID（来自第一组）")
+    course_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    course_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # 该时段授课的教师 ID 列表（合上课时多人，元素为第一组的 teacher_id 字符串）
     teacher_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
 

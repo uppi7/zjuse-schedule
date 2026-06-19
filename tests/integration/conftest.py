@@ -67,12 +67,12 @@ def _require_integration_stack():
 
 @pytest_asyncio.fixture
 async def integration_client() -> AsyncIterator[AsyncClient]:
-    """ADMIN 角色，打真实栈。每个测试一个 client。"""
+    """SYS_ADMIN 角色，打真实栈。每个测试一个 client。"""
     async with AsyncClient(
         base_url=INTEGRATION_BASE_URL,
         headers={
             "X-User-Id": "integration-admin",
-            "X-User-Role": "ADMIN",
+            "X-User-Role": "SYS_ADMIN",
         },
         timeout=60.0,
     ) as ac:
@@ -130,3 +130,23 @@ async def _ensure_integration_schema(integration_mysql_engine: AsyncEngine):
         )
         if int(exists_result.scalar_one()) == 0:
             await conn.execute(text("ALTER TABLE schedule_tasks ADD COLUMN result_meta JSON NULL"))
+
+        for column_name, ddl in {
+            "offering_id": "ALTER TABLE schedule_entries ADD COLUMN offering_id VARCHAR(32) NULL",
+            "course_code": "ALTER TABLE schedule_entries ADD COLUMN course_code VARCHAR(64) NULL",
+            "course_name": "ALTER TABLE schedule_entries ADD COLUMN course_name VARCHAR(128) NULL",
+        }.items():
+            exists_result = await conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'schedule_entries'
+                      AND COLUMN_NAME = :column_name
+                    """
+                ),
+                {"column_name": column_name},
+            )
+            if int(exists_result.scalar_one()) == 0:
+                await conn.execute(text(ddl))

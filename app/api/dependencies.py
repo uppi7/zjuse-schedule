@@ -22,7 +22,8 @@ def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> Curr
     if not current_user.is_admin():
         raise BizException(
             BizCode.FORBIDDEN,
-            f"Required role: {settings.ROLE_ADMIN}, current role: {current_user.role}",
+            "Required role: SYS_ADMIN or ACADEMIC_ADMIN, "
+            f"current role: {current_user.role}",
         )
     return current_user
 

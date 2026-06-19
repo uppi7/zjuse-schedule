@@ -13,6 +13,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # ── App ──────────────────────────────────────────────────────────────
@@ -53,10 +54,16 @@ class Settings(BaseSettings):
         auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
         return f"redis://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.CELERY_RESULT_DB}"
 
-    # ── 上游微服务（基础信息组，第一子系统）──────────────────────────────────
-    # 子系统间默认互信，不走 Bearer/OAuth；通过 X-User-Id / X-User-Role 透传调用者身份。
-    INFO_SERVICE_BASE_URL: str = "http://info-service:8000"
-    INFO_SERVICE_COURSES_PATH: str = "/api/v1/courses"
+    # ── 上游微服务（经 Gateway 调用 Auth / Info）────────────────────────────
+    GATEWAY_BASE_URL: str = "http://gateway:8000"
+    SCHEDULE_SERVICE_CLIENT_ID: str = "schedule_service"
+    SCHEDULE_SERVICE_CLIENT_SECRET: str = "change-me-schedule-service-secret"
+    AUTH_SYS_LOGIN_PATH: str = "/auth/sys/login"
+    INFO_OFFERINGS_PATH: str = "/api/v1/info/offerings/"
+    INFO_COURSES_PATH: str = "/api/v1/info/courses/"
+    INFO_OFFERING_TEACHERS_PATH_TEMPLATE: str = (
+        "/api/v1/info/offerings/{offering_id}/teachers"
+    )
     ALLOW_UPSTREAM_STUB_FALLBACK: bool = False
 
     # ── 认证 Header 字段名（网关透传）────────────────────────────────────────
@@ -65,7 +72,7 @@ class Settings(BaseSettings):
     AUTH_HEADER_USER_ROLE: str = "X-User-Role"
 
     # 角色枚举值
-    ROLE_ADMIN: str = "ADMIN"
+    ADMIN_ROLES: set[str] = {"SYS_ADMIN", "ACADEMIC_ADMIN"}
     ROLE_TEACHER: str = "TEACHER"
     ROLE_STUDENT: str = "STUDENT"
 

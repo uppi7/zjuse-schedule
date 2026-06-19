@@ -40,7 +40,7 @@ async def db_session() -> AsyncSession:
 
 @pytest.fixture
 async def client(db_session: AsyncSession) -> AsyncClient:
-    """提供测试用 HTTP 客户端，注入测试 DB Session，并附带 ADMIN Header。"""
+    """提供测试用 HTTP 客户端，注入测试 DB Session，并附带 SYS_ADMIN Header。"""
 
     async def override_get_db():
         yield db_session
@@ -52,7 +52,7 @@ async def client(db_session: AsyncSession) -> AsyncClient:
         base_url="http://test",
         headers={
             "X-User-Id": "test-admin-001",
-            "X-User-Role": "ADMIN",
+            "X-User-Role": "SYS_ADMIN",
         },
     ) as ac:
         yield ac

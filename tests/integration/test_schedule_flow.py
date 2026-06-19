@@ -152,7 +152,7 @@ async def test_classroom_persists_across_requests(
             base_url=str(integration_client.base_url),
             headers={
                 "X-User-Id": "integration-admin-2",
-                "X-User-Role": "ADMIN",
+                "X-User-Role": "SYS_ADMIN",
             },
             timeout=60.0,
         ) as new_client:

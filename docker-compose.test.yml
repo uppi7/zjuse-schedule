@@ -52,7 +52,7 @@ services:
       MYSQL_DB: schedule_test
       REDIS_HOST: redis-test
       REDIS_PORT: "6379"
-      ALLOW_UPSTREAM_STUB_FALLBACK: "true"
+      ALLOW_UPSTREAM_STUB_FALLBACK: "false"
     ports:
       - "8003:8000"
     depends_on:
@@ -80,7 +80,7 @@ services:
       MYSQL_DB: schedule_test
       REDIS_HOST: redis-test
       REDIS_PORT: "6379"
-      ALLOW_UPSTREAM_STUB_FALLBACK: "true"
+      ALLOW_UPSTREAM_STUB_FALLBACK: "false"
     depends_on:
       mysql-test:
         condition: service_healthy

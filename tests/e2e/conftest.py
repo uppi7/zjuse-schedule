@@ -37,10 +37,10 @@ def _require_e2e_stack():
 
 @pytest_asyncio.fixture
 async def admin_client() -> AsyncClient:
-    """ADMIN 角色 client。"""
+    """SYS_ADMIN 角色 client。"""
     async with AsyncClient(
         base_url=E2E_BASE_URL,
-        headers={"X-User-Id": "e2e-admin", "X-User-Role": "ADMIN"},
+        headers={"X-User-Id": "e2e-admin", "X-User-Role": "SYS_ADMIN"},
         timeout=30.0,
     ) as ac:
         yield ac

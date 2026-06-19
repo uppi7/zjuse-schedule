@@ -164,13 +164,13 @@ async def test_partial_results_mark_task_partial(monkeypatch):
         return (
             [
                 CourseInput(
-                    course_id="C001",
+                    course_id="O001",
                     teacher_ids=["T001"],
                     student_count=10,
                     room_requirements=[RoomRequirement(RoomType.LECTURE, 2)],
                 ),
                 CourseInput(
-                    course_id="C002",
+                    course_id="O002",
                     teacher_ids=["T002"],
                     student_count=200,
                     room_requirements=[RoomRequirement(RoomType.LECTURE, 2)],
@@ -186,6 +186,18 @@ async def test_partial_results_mark_task_partial(monkeypatch):
                 )
             ],
             [],
+            {
+                "O001": {
+                    "course_id": "C001",
+                    "course_code": "CS001",
+                    "course_name": "Algorithms",
+                },
+                "O002": {
+                    "course_id": "C002",
+                    "course_code": "CS002",
+                    "course_name": "Data Structures",
+                },
+            },
         )
 
     async def fake_mark_task_running(task_id_arg: str) -> None:
@@ -220,7 +232,7 @@ async def test_partial_results_mark_task_partial(monkeypatch):
     assert captured["semester"] == semester
     assert captured["task_status"] == "PARTIAL"
     assert captured["scheduled_count"] >= 1
-    assert captured["unscheduled"] == ["C002"]
+    assert captured["unscheduled"] == ["O002"]
 
 
 async def _wait_for_redis_meta_state(

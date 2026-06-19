@@ -40,7 +40,7 @@ async def _client_for(db_session: AsyncSession, user_id: str, role: str) -> Asyn
 
 @pytest.fixture
 async def admin_client(db_session: AsyncSession):
-    async with await _client_for(db_session, "admin-b3-001", "ADMIN") as ac:
+    async with await _client_for(db_session, "admin-b3-001", "SYS_ADMIN") as ac:
         yield ac
     app.dependency_overrides.clear()
 
@@ -85,6 +85,7 @@ async def _add_entry(
     entry = ScheduleEntry(
         task_id=task.id,
         semester=semester,
+        offering_id=f"{course_id}-OFFERING",
         course_id=course_id,
         teacher_ids=teacher_ids,
         classroom_id=1,

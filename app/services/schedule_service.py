@@ -135,12 +135,15 @@ async def get_schedule_entries(
     semester: str,
     teacher_id: str | None = None,
     course_id: str | None = None,
+    offering_id: str | None = None,
 ) -> list[ScheduleEntry]:
     """
     查询课表条目，支持按学期/教师/课程筛选。
     teacher_id 是 JSON 数组的成员匹配，跨 MySQL/SQLite 兼容地在 Python 侧过滤。
     """
     stmt = select(ScheduleEntry).where(ScheduleEntry.semester == semester)
+    if offering_id:
+        stmt = stmt.where(ScheduleEntry.offering_id == offering_id)
     if course_id:
         stmt = stmt.where(ScheduleEntry.course_id == course_id)
     result = await db.execute(stmt)

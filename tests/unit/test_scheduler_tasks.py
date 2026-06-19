@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.algorithm.engine import RoomType, ScheduleResult
+from app.core.external_clients import OfferingSchedulePayload
 from app.models.classroom import Classroom, ClassroomType
 from app.models.schedule import DayOfWeek, ScheduleEntry, ScheduleStatus, ScheduleTask, WeekParity
 from app.schemas.response import BizCode, BizException
@@ -19,19 +20,19 @@ pytestmark = pytest.mark.unit
 
 
 def test_map_course_payload_to_algorithm_input():
-    course = scheduler_tasks._map_course(
-        {
-            "course_id": "C001",
-            "teacher_id": "T001",
-            "student_count": "45",
-            "room_requirements": [
-                {"room_type": "LECTURE", "hours": 2},
-                {"room_type": "COMPUTER_LAB", "hours": "0"},
-            ],
-        }
-    )
+    course = scheduler_tasks._map_course({
+        "offering_id": "O001",
+        "course_id": "C001",
+        "course_code": "CS001",
+        "course_name": "Algorithms",
+        "teacher_ids": ["T001"],
+        "student_count": "45",
+        "room_requirements": [
+            {"room_type": "LECTURE", "hours": 2},
+        ],
+    })
 
-    assert course.course_id == "C001"
+    assert course.course_id == "O001"
     assert course.teacher_ids == ["T001"]
     assert course.student_count == 45
     assert len(course.room_requirements) == 1
@@ -46,49 +47,44 @@ def test_invalid_course_payload_raises_upstream_error():
     assert exc_info.value.code == BizCode.UPSTREAM_FETCH_FAILED
 
 
-async def test_fetch_course_payloads_uses_stub_when_enabled(monkeypatch):
-    class FailingInfoServiceClient:
-        def __init__(self, user_id: str, role: str) -> None:
-            self.user_id = user_id
-            self.role = role
-            self.closed = False
+def test_map_course_rejects_empty_teachers():
+    with pytest.raises(BizException) as exc_info:
+        scheduler_tasks._map_courses([{
+            "offering_id": "O001",
+            "course_id": "C001",
+            "teacher_ids": [],
+            "student_count": 45,
+            "room_requirements": [{"room_type": "LECTURE", "hours": 2}],
+        }])
 
-        async def get_all_courses(self, semester: str):
+    assert exc_info.value.code == BizCode.UPSTREAM_FETCH_FAILED
+
+
+def test_map_course_rejects_invalid_credit():
+    with pytest.raises(BizException) as exc_info:
+        scheduler_tasks._map_courses([{
+            "offering_id": "O001",
+            "course_id": "C001",
+            "teacher_ids": ["T001"],
+            "student_count": 45,
+            "room_requirements": [{"room_type": "LECTURE", "hours": 0}],
+        }])
+
+    assert exc_info.value.code == BizCode.UPSTREAM_FETCH_FAILED
+
+
+async def test_fetch_course_payloads_fails_without_stub_fallback(monkeypatch):
+    class FailingInfoServiceClient:
+        def __init__(self) -> None:
+            pass
+
+        async def get_scheduling_inputs(self, semester: str):
             raise RuntimeError("upstream down")
 
         async def aclose(self) -> None:
-            self.closed = True
-
-    monkeypatch.setattr(scheduler_tasks, "InfoServiceClient", FailingInfoServiceClient)
-    monkeypatch.setattr(
-        scheduler_tasks.settings,
-        "ALLOW_UPSTREAM_STUB_FALLBACK",
-        True,
-    )
-
-    rows = await scheduler_tasks._fetch_course_payloads("2024-2025-1", "admin-001")
-
-    assert rows[0]["course_id"] == "STUB-C001"
-    assert rows[0]["semester"] == "2024-2025-1"
-
-
-async def test_fetch_course_payloads_fails_when_stub_disabled(monkeypatch):
-    class FailingInfoServiceClient:
-        def __init__(self, user_id: str, role: str) -> None:
-            pass
-
-        async def get_all_courses(self, semester: str):
-            raise RuntimeError("upstream down")
-
-        async def aclose(self) -> None:
             pass
 
     monkeypatch.setattr(scheduler_tasks, "InfoServiceClient", FailingInfoServiceClient)
-    monkeypatch.setattr(
-        scheduler_tasks.settings,
-        "ALLOW_UPSTREAM_STUB_FALLBACK",
-        False,
-    )
 
     with pytest.raises(BizException) as exc_info:
         await scheduler_tasks._fetch_course_payloads("2024-2025-1", "admin-001")
@@ -96,19 +92,49 @@ async def test_fetch_course_payloads_fails_when_stub_disabled(monkeypatch):
     assert exc_info.value.code == BizCode.UPSTREAM_FETCH_FAILED
 
 
+async def test_fetch_course_payloads_uses_gateway_client(monkeypatch):
+    class FakeInfoServiceClient:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def get_scheduling_inputs(self, semester: str):
+            return [
+                OfferingSchedulePayload(
+                    offering_id="O001",
+                    course_id="C001",
+                    course_code="CS001",
+                    course_name="Algorithms",
+                    teacher_ids=["T001"],
+                    student_count=30,
+                    room_requirements=[{"room_type": "LECTURE", "hours": 2}],
+                )
+            ]
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    monkeypatch.setattr(scheduler_tasks, "InfoServiceClient", FakeInfoServiceClient)
+
+    rows = await scheduler_tasks._fetch_course_payloads("2024-2025-1", "admin-001")
+
+    assert rows[0]["offering_id"] == "O001"
+    assert rows[0]["course_id"] == "C001"
+
+
 async def test_fetch_upstream_data_maps_classrooms_and_preferences(
     db_session: AsyncSession,
     monkeypatch,
 ):
     async def fake_fetch_course_payloads(semester: str, triggered_by: str):
-        return [
-            {
-                "course_id": "C001",
-                "teacher_id": "T001",
-                "student_count": 30,
-                "room_requirements": [{"room_type": "LECTURE", "hours": 2}],
-            }
-        ]
+        return [{
+            "offering_id": "O001",
+            "course_id": "C001",
+            "course_code": "CS001",
+            "course_name": "Algorithms",
+            "teacher_ids": ["T001"],
+            "student_count": 30,
+            "room_requirements": [{"room_type": "LECTURE", "hours": 2}],
+        }]
 
     async def fake_list_for_algorithm(db: AsyncSession, semester: str):
         return []
@@ -139,12 +165,19 @@ async def test_fetch_upstream_data_maps_classrooms_and_preferences(
         fake_list_for_algorithm,
     )
 
-    courses, classrooms, preferences = await scheduler_tasks._fetch_upstream_data(
+    courses, classrooms, preferences, offering_meta = await scheduler_tasks._fetch_upstream_data(
         "2024-2025-1",
         "admin-001",
     )
 
-    assert courses[0].course_id == "C001"
+    assert courses[0].course_id == "O001"
+    assert offering_meta == {
+        "O001": {
+            "course_id": "C001",
+            "course_code": "CS001",
+            "course_name": "Algorithms",
+        }
+    }
     assert classrooms[0].room_type == RoomType.LECTURE
     assert classrooms[0].available_slots == {(1, 1), (1, 2)}
     assert preferences == []
@@ -168,13 +201,20 @@ async def test_save_results_writes_entries_and_success_status(
         "AsyncSessionLocal",
         lambda: _SessionContext(db_session),
     )
+    scheduler_tasks._OFFERING_META_BY_TASK_ID["celery-success"] = {
+        "O001": {
+            "course_id": "C001",
+            "course_code": "CS001",
+            "course_name": "Algorithms",
+        }
+    }
 
     await scheduler_tasks._save_results(
         "celery-success",
         "2024-2025-1",
         [
             ScheduleResult(
-                course_id="C001",
+                course_id="O001",
                 teacher_ids=["T001"],
                 classroom_id=1,
                 day_of_week=1,
@@ -195,7 +235,10 @@ async def test_save_results_writes_entries_and_success_status(
     assert task.status == ScheduleStatus.SUCCESS
     assert task.result_meta == {"unscheduled": [], "unscheduled_count": 0}
     assert len(entries) == 1
+    assert entries[0].offering_id == "O001"
     assert entries[0].course_id == "C001"
+    assert entries[0].course_code == "CS001"
+    assert entries[0].course_name == "Algorithms"
     assert entries[0].teacher_ids == ["T001"]
 
 
@@ -211,21 +254,20 @@ async def test_save_results_is_idempotent_and_marks_partial(
     )
     db_session.add(task)
     await db_session.flush()
-    db_session.add(
-        ScheduleEntry(
-            task_id=task.id,
-            semester="2024-2025-1",
-            course_id="OLD",
-            teacher_ids=["OLD-T"],
-            classroom_id=1,
-            day_of_week=DayOfWeek.MON,
-            slot_start=1,
-            slot_end=2,
-            week_start=1,
-            week_end=16,
-            week_parity=WeekParity.ALL,
-        )
-    )
+    db_session.add(ScheduleEntry(
+        task_id=task.id,
+        semester="2024-2025-1",
+        offering_id="OLD-O",
+        course_id="OLD",
+        teacher_ids=["OLD-T"],
+        classroom_id=1,
+        day_of_week=DayOfWeek.MON,
+        slot_start=1,
+        slot_end=2,
+        week_start=1,
+        week_end=16,
+        week_parity=WeekParity.ALL,
+    ))
     await db_session.commit()
 
     monkeypatch.setattr(
@@ -233,13 +275,20 @@ async def test_save_results_is_idempotent_and_marks_partial(
         "AsyncSessionLocal",
         lambda: _SessionContext(db_session),
     )
+    scheduler_tasks._OFFERING_META_BY_TASK_ID["celery-partial"] = {
+        "NEW-O": {
+            "course_id": "NEW-C",
+            "course_code": "CS002",
+            "course_name": "Data Structures",
+        }
+    }
 
     await scheduler_tasks._save_results(
         "celery-partial",
         "2024-2025-1",
         [
             ScheduleResult(
-                course_id="NEW",
+                course_id="NEW-O",
                 teacher_ids=["T002"],
                 classroom_id=2,
                 day_of_week=2,
@@ -262,7 +311,8 @@ async def test_save_results_is_idempotent_and_marks_partial(
         "unscheduled": ["UNSCHEDULED-C001"],
         "unscheduled_count": 1,
     }
-    assert [entry.course_id for entry in entries] == ["NEW"]
+    assert [entry.offering_id for entry in entries] == ["NEW-O"]
+    assert [entry.course_id for entry in entries] == ["NEW-C"]
 
 
 async def test_mark_task_failed_writes_error_message(

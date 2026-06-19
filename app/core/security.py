@@ -16,7 +16,7 @@ class CurrentUser:
     role: str
 
     def is_admin(self) -> bool:
-        return self.role == settings.ROLE_ADMIN
+        return self.role in settings.ADMIN_ROLES
 
     def is_teacher(self) -> bool:
         return self.role == settings.ROLE_TEACHER
