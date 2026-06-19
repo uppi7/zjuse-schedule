@@ -29,34 +29,3 @@ jobs:
         with:
           name: coverage-unit-solver
           path: coverage.xml
-
-  integration-and-e2e:
-    name: integration + e2e (needs test stack)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install test dependencies
-        run: pip install -r requirements-test.txt
-
-      - name: Start test stack
-        run: docker compose -f docker-compose.test.yml up -d --wait
-
-      - name: Run integration + e2e tests
-        env:
-          INTEGRATION_BASE_URL: http://localhost:8003
-          E2E_BASE_URL: http://localhost:8003
-        run: pytest -m "integration or e2e" -v
-
-      - name: Dump test stack logs on failure
-        if: failure()
-        run: docker compose -f docker-compose.test.yml logs
-
-      - name: Tear down test stack
-        if: always()
-        run: docker compose -f docker-compose.test.yml down -v

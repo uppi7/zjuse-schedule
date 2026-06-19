@@ -417,7 +417,10 @@ async def test_manual_adjust_updates_entry_and_persists(
     entry = ScheduleEntry(
         task_id=task.id,
         semester=semester,
+        offering_id="MANUAL-OFFERING-001",
         course_id="MANUAL-C001",
+        course_code="MANUAL-001",
+        course_name="手动调整测试课程",
         teacher_ids=["teacher-manual-001"],
         classroom_id=source_classroom.id,
         day_of_week=DayOfWeek.MON,

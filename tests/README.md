@@ -1,6 +1,6 @@
 # tests/ — 测试模块说明
 
-排课系统的测试入口。采用 4 层架构，每层独立 marker、可单独触发；CI 同时覆盖全部 4 层
+排课系统的测试入口。采用 4 层架构，每层独立 marker、可单独触发；GitHub CI 只跑无需外部栈的 unit + solver，integration/e2e 由本地或 STSS-gateway 完整栈验收触发。
 
 ## 分层架构
 
