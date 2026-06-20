@@ -56,5 +56,6 @@ app.include_router(teacher_preferences.router, prefix=API_PREFIX)
 
 
 @app.get("/health", tags=["健康检查"])
+@app.get(f"{API_PREFIX}/health", tags=["健康检查"])
 async def health_check():
     return {"status": "ok", "service": settings.APP_NAME}
