@@ -54,6 +54,11 @@ app.include_router(classrooms.router, prefix=API_PREFIX)
 app.include_router(schedule.router, prefix=API_PREFIX)
 app.include_router(teacher_preferences.router, prefix=API_PREFIX)
 
+# Gateway routes all scheduling-group traffic below /api/v1/schedule.
+# Keep the original resource routes and expose aliases for frontend integration.
+app.include_router(classrooms.router, prefix=f"{API_PREFIX}/schedule")
+app.include_router(teacher_preferences.router, prefix=f"{API_PREFIX}/schedule")
+
 
 @app.get("/health", tags=["健康检查"])
 @app.get(f"{API_PREFIX}/health", tags=["健康检查"])
